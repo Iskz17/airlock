@@ -1,0 +1,15 @@
+{
+  "_comment": "Ready-to-paste entry for the official `claude-plugins-official` marketplace. To submit airlock to the default /plugin directory: open a PR against Anthropic's marketplace repo and add this object to its `plugins` array. Bump `ref` to each new release tag. Self-hosting needs NOTHING here — `/plugin marketplace add Iskz17/airlock` already works.",
+  "name": "airlock",
+  "description": "Layered prompt-injection / agent-security guard. Scans WebFetch/WebSearch content for injection (incl. invisible-Unicode ASCII smuggling), gates outbound exfiltration of secrets/PII and Markdown-URL sinks (EchoLeak), checks task drift before sensitive actions, vets installed MCP servers for tool poisoning, and blocks poisoned memory writes.",
+  "author": { "name": "Iskz17" },
+  "category": "security",
+  "source": {
+    "source": "git-subdir",
+    "url": "https://github.com/Iskz17/airlock.git",
+    "path": "adapters/claude-code",
+    "ref": "v0.1.0"
+  },
+  "homepage": "https://github.com/Iskz17/airlock",
+  "keywords": ["security", "prompt-injection", "guardrails", "ascii-smuggling", "exfiltration", "mcp"]
+}

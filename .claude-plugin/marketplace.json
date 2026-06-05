@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "airlock",
+  "description": "Layered prompt-injection / agent-security guard for Claude Code — ingress (invisible-Unicode + heuristics + Prompt Guard 2), egress exfiltration gate, task-drift, MCP supply-chain vetting, and memory-write poisoning defense.",
+  "owner": {
+    "name": "airlock contributors",
+    "email": "Iskz17@users.noreply.github.com"
+  },
+  "plugins": [
+    {
+      "name": "airlock",
+      "description": "Defends an agent at every trust boundary: scans WebFetch/WebSearch content for prompt injection (incl. invisible-Unicode ASCII smuggling), gates outbound exfiltration of secrets/PII and Markdown-URL sinks (EchoLeak), checks task drift before sensitive actions, vets installed MCP servers for tool poisoning, and blocks poisoned memory writes.",
+      "version": "0.1.0",
+      "author": { "name": "airlock contributors" },
+      "category": "security",
+      "source": "./adapters/claude-code",
+      "homepage": "https://github.com/Iskz17/airlock",
+      "keywords": ["security", "prompt-injection", "guardrails", "ascii-smuggling", "exfiltration", "mcp"]
+    }
+  ]
+}

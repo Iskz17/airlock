@@ -1,0 +1,37 @@
+{
+  "name": "airlock-openclaw",
+  "version": "0.1.0",
+  "description": "airlock guard adapter for openclaw — true-strip ingress, egress sink rewriting, and task-drift gating via the shared Python guard core (HTTP sidecar).",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "MIT",
+  "author": "airlock contributors",
+  "homepage": "https://github.com/Iskz17/airlock/tree/main/adapters/openclaw",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Iskz17/airlock.git",
+    "directory": "adapters/openclaw"
+  },
+  "keywords": ["openclaw", "prompt-injection", "agent-security", "guardrails", "exfiltration"],
+  "files": ["src", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types test/roundtrip.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0"
+  },
+  "airlock": {
+    "requires": "python3 -m guard_core.server  (loopback sidecar; set AIRLOCK_SIDECAR_URL to override)"
+  }
+}

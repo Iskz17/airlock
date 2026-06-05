@@ -1,0 +1,76 @@
+{
+  "description": "airlock — ingress scan of fetched web content (Stage 0 invisible-Unicode + Stage 1 heuristics + Stage 2 Prompt Guard 2) and egress guard on outbound tools/replies (Stage 4 secrets/PII + exfil sinks).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap.py\"",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/mcp_vet.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scan_input.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "WebFetch|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/egress_gate.py\"",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/check_alignment.py\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_gate.py\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/egress_gate.py\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

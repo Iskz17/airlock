@@ -29,32 +29,41 @@ A layered prompt-injection / agent-security guard with a **shared core** and **t
 claude --plugin-dir /Users/iskandarzulkarnain/airlock/adapters/claude-code
 ```
 
-Stages 0–1 (and the offline parts of 4/5/6) work **immediately** with only Python 3 (stdlib) — nothing to download.
+### Which stages are on, and how to enable the rest
 
-### Enabling the heavier stages
+Install airlock and you're **immediately protected at every boundary, fully offline** — the stdlib stages need nothing. The heavier detectors are opt-in. Here's the whole picture at a glance:
 
-The optional detectors (Stage 2 Prompt Guard 2, Stage 2b OCR, Stage 6 mcp-scan) are opt-in. The easiest way is airlock's own installer, which puts them in an **isolated managed venv** (`~/.cache/airlock/venv`; never your system Python — uninstall by deleting that folder):
+| Stage | Boundary | On by default? | How to enable |
+|---|---|---|---|
+| **0** invisible-Unicode | ingress | ✅ on | — (stdlib, offline) |
+| **1** heuristics | ingress | ✅ on | — (stdlib, offline) |
+| **2** Prompt Guard 2 | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + model |
+| **2b** image OCR | ingress | ⬜ opt-in | `/airlock-setup ocr` **+** system `tesseract` (`brew install tesseract`) |
+| **3** AlignmentCheck (task drift) | action | ⬜ opt-in | `AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY` (or Ollama) — a service, *not a download* |
+| **4** egress exfil (secrets + MD sinks) | egress | ✅ on | — (stdlib, offline) |
+| **4** richer PII (Presidio) | egress | ⬜ opt-in | `/airlock-setup pii` **+** `AIRLOCK_EGRESS_PII=1` |
+| **5** memory-write guard | persistence | ✅ on | — (stdlib, offline) |
+| **6** MCP vetting (offline) | supply chain | ✅ on | — (stdlib, offline) |
+| **6** mcp-scan enrichment | supply chain | ⬜ opt-in | `/airlock-setup mcp` **+** `AIRLOCK_MCP_SCAN=1` |
+
+**One command for all the installable stages** — airlock installs them into an **isolated managed venv** (`~/.cache/airlock/venv`; never your system Python — uninstall by deleting that folder):
 
 ```bash
-/airlock-setup                 # in a Claude Code session — installs EVERYTHING (promptguard, ocr, pii, mcp)
-/airlock-setup promptguard     # or narrow to a single extra
-airlock-setup --extras ocr     # CLI equivalent (a pip install of this repo provides it)
+/airlock-setup                 # in a Claude Code session — installs EVERYTHING (2, 2b, 4-PII, 6)
+/airlock-setup promptguard     # …or narrow to a single extra
+airlock-setup --extras all     # CLI equivalent (a pip install of this repo provides it)
 ```
 
-Or set it and forget it — install in the background on first session (off by default, non-blocking, never silent):
+Or set-and-forget — install in the background on first session (off by default, non-blocking, never silent):
 
 ```bash
 export AIRLOCK_AUTO_INSTALL=1                       # default extras: all
 export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 ```
 
-Stage 3 (task-drift) is not installable — it needs a backend (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or Ollama). OCR also needs the system `tesseract` binary.
+Prefer your own environment instead of the managed venv? `pip install "airlock-guard-core[all]"` (or `[promptguard]` / `[pii]` / `[ocr]` / `[mcp]`).
 
-Notes: **OCR** also needs the system `tesseract` binary (`brew install tesseract` / `apt-get install tesseract-ocr`). **Stage 3 (task-drift)** can't be installed — it needs a backend (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or Ollama). You can still install extras straight into your own environment instead:
-
-```bash
-pip install "airlock-guard-core[promptguard]"   # or [pii] / [ocr] / [mcp] / [all]
-```
+> Two stages can't be turned on by a download alone: **Stage 2b** also needs the system `tesseract` binary, and **Stage 3** needs an LLM backend (a key/service). Everything else is one command or already on.
 
 ## Use
 

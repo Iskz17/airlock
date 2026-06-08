@@ -47,9 +47,12 @@ and tag releases with the built-in helper:
 claude plugin tag adapters/claude-code     # creates airlock--v0.2.1, validates agreement
 ```
 
-To also appear in the **official directory**, open a PR adding an airlock entry
-to `anthropics/claude-code` `claude-plugins-official` (`source: git-subdir`
-pointing at this repo's `adapters/claude-code`).
+To also appear in the **official directory** (`claude-plugins-official`), external
+plugins are **not** added by pull request — Anthropic reviews submissions through
+the [plugin directory submission form](https://clau.de/plugin-directory-submission)
+(quality + security review). The entry that represents airlock there is kept in
+[docs/marketplace-entry.json](marketplace-entry.json) (`source: git-subdir`
+pinned to the release `ref` + `sha`). Bump it on each release.
 
 ## 2. PyPI (`airlock-guard-core`)
 

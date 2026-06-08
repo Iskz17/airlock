@@ -36,17 +36,19 @@ Stages 0–1 (and the offline parts of 4/5/6) work **immediately** with only Pyt
 The optional detectors (Stage 2 Prompt Guard 2, Stage 2b OCR, Stage 6 mcp-scan) are opt-in. The easiest way is airlock's own installer, which puts them in an **isolated managed venv** (`~/.cache/airlock/venv`; never your system Python — uninstall by deleting that folder):
 
 ```bash
-/airlock-setup                 # in a Claude Code session — installs Stage 2 (promptguard) by default
-/airlock-setup all             # everything (promptguard, pii, ocr, mcp)
-airlock-setup --extras ocr     # or the CLI equivalent (pip install of this repo provides it)
+/airlock-setup                 # in a Claude Code session — installs EVERYTHING (promptguard, ocr, pii, mcp)
+/airlock-setup promptguard     # or narrow to a single extra
+airlock-setup --extras ocr     # CLI equivalent (a pip install of this repo provides it)
 ```
 
 Or set it and forget it — install in the background on first session (off by default, non-blocking, never silent):
 
 ```bash
-export AIRLOCK_AUTO_INSTALL=1                       # default extras: promptguard
-export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: choose extras
+export AIRLOCK_AUTO_INSTALL=1                       # default extras: all
+export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 ```
+
+Stage 3 (task-drift) is not installable — it needs a backend (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or Ollama). OCR also needs the system `tesseract` binary.
 
 Notes: **OCR** also needs the system `tesseract` binary (`brew install tesseract` / `apt-get install tesseract-ocr`). **Stage 3 (task-drift)** can't be installed — it needs a backend (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or Ollama). You can still install extras straight into your own environment instead:
 
@@ -80,7 +82,7 @@ pip install "airlock-guard-core[promptguard]"   # or [pii] / [ocr] / [mcp] / [al
 | `AIRLOCK_MEMORY_PATHS` | empty | extra fnmatch globs treated as memory sinks (Stage 5) |
 | `AIRLOCK_MEMORY_BLOCK` | off | `1` → deny (not ask) a poisoned memory write |
 | `AIRLOCK_AUTO_INSTALL` | off | `1` → background-install heavier extras into the managed venv on first session |
-| `AIRLOCK_AUTO_INSTALL_EXTRAS` | `promptguard` | which extras to auto-install (`promptguard,ocr,…` or `all`) |
+| `AIRLOCK_AUTO_INSTALL_EXTRAS` | `all` | which extras to auto-install (`all`, or narrow: `promptguard,ocr,…`) |
 | `AIRLOCK_HOME` | `~/.cache/airlock` | where the managed dependency venv lives |
 | `AIRLOCK_SIDECAR_PORT` | `8787` | loopback port for the openclaw sidecar (`python3 -m guard_core.server`) |
 

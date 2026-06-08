@@ -155,7 +155,7 @@ def _lock_path():
 def maybe_autostart(extras_str, max_lock_age=3600):
     """For AIRLOCK_AUTO_INSTALL: kick off a background install if needed.
     Returns a short human status string for the SessionStart line. Non-blocking."""
-    extras = [e for e in (extras_str or "promptguard").replace("|", ",").split(",") if e.strip()]
+    extras = [e for e in (extras_str or "all").replace("|", ",").split(",") if e.strip()]
     want = set(expand(extras))
     if not want:
         return ""
@@ -190,7 +190,7 @@ def maybe_autostart(extras_str, max_lock_age=3600):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    extras = ["promptguard"]
+    extras = ["all"]  # default: install every pip-installable extra (Stage 2/2b/4-PII/6)
     dry = "--dry-run" in argv
     release_lock = "--release-lock" in argv
     if "--status" in argv:

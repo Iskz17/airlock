@@ -8,7 +8,7 @@
     "source": "git-subdir",
     "url": "https://github.com/Iskz17/airlock.git",
     "path": "adapters/claude-code",
-    "ref": "v0.2.0"
+    "ref": "v0.2.1"
   },
   "homepage": "https://github.com/Iskz17/airlock",
   "keywords": ["security", "prompt-injection", "guardrails", "ascii-smuggling", "exfiltration", "mcp"]

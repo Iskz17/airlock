@@ -1,17 +1,19 @@
 ---
-description: Install airlock's optional heavier stages (Prompt Guard 2, OCR, mcp-scan) into its managed venv
-argument-hint: "[promptguard|pii|ocr|mcp|all]  (default: promptguard)"
+description: Install airlock's optional heavier stages (Prompt Guard 2, OCR, PII, mcp-scan) into its managed venv
+argument-hint: "[all|promptguard|pii|ocr|mcp]  (default: all)"
 ---
 
 Install airlock's optional dependencies into its **managed, isolated venv**
 (`~/.cache/airlock/venv` — never your system Python; remove by deleting that
 folder). This enables the heavier detection stages that are off by default.
 
-Run this exact command and stream its output (it may take a few minutes for
-Prompt Guard 2, which pulls PyTorch + a model):
+By default this installs **everything** pip-installable (Stage 2 Prompt Guard 2,
+Stage 2b OCR, Stage 4 Presidio PII, Stage 6 mcp-scan). Pass a single extra to
+narrow it (e.g. `promptguard`). Run this exact command and stream its output
+(it may take a few minutes — `all` pulls PyTorch + a model + Presidio/spaCy):
 
 ```bash
-PYTHONPATH="${CLAUDE_PLUGIN_ROOT}" bash "${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh" -m guard_core.installer --extras "${ARGUMENTS:-promptguard}"
+PYTHONPATH="${CLAUDE_PLUGIN_ROOT}" bash "${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh" -m guard_core.installer --extras "${ARGUMENTS:-all}"
 ```
 
 Then briefly tell the user:

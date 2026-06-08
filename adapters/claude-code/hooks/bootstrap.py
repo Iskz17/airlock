@@ -42,7 +42,7 @@ def main():
     if os.environ.get("AIRLOCK_AUTO_INSTALL", "0").strip().lower() not in ("0", "false", "no", "off", ""):
         try:
             from guard_core.installer import maybe_autostart
-            note = maybe_autostart(os.environ.get("AIRLOCK_AUTO_INSTALL_EXTRAS", "promptguard"))
+            note = maybe_autostart(os.environ.get("AIRLOCK_AUTO_INSTALL_EXTRAS", "all"))
             if note:
                 msg += " [auto-install: %s]" % note
         except Exception:

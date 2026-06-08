@@ -2,6 +2,15 @@
 
 All notable changes to airlock are documented here. Versions follow semver.
 
+## [0.2.1] — 2026-06-08
+
+### Changed
+- `/airlock-setup` (and `AIRLOCK_AUTO_INSTALL`) now default to **`all`** — one
+  command installs every pip-installable extra (Stage 2 Prompt Guard 2, Stage 2b
+  OCR, Stage 4 Presidio PII, Stage 6 mcp-scan) instead of just Prompt Guard 2.
+  Pass a single extra to narrow it. Stage 3 (task-drift) still needs a backend
+  key (not a download).
+
 ## [0.2.0] — 2026-06-08
 
 ### Added

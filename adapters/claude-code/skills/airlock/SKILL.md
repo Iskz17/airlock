@@ -1,7 +1,7 @@
 ---
 name: airlock
 description: Use when the user asks about airlock, prompt-injection defense, ASCII/invisible-Unicode smuggling, or how fetched web content is being guarded — and to explain or configure the airlock plugin's behavior. Documents the data-vs-instructions discipline the agent should follow with any externally-fetched text.
-version: 0.2.0
+version: 0.2.1
 ---
 
 # airlock — prompt-injection guard

@@ -10,7 +10,7 @@
     {
       "name": "airlock",
       "description": "Defends an agent at every trust boundary: scans WebFetch/WebSearch content for prompt injection (incl. invisible-Unicode ASCII smuggling), gates outbound exfiltration of secrets/PII and Markdown-URL sinks (EchoLeak), checks task drift before sensitive actions, vets installed MCP servers for tool poisoning, and blocks poisoned memory writes.",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "author": { "name": "airlock contributors" },
       "category": "security",
       "source": "./adapters/claude-code",

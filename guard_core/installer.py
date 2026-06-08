@@ -22,6 +22,7 @@ from __future__ import annotations
 import glob
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -49,11 +50,17 @@ def venv_dir():
     return os.path.join(home(), "venv")
 
 
+def _ver_tag():
+    return "python%d.%d" % sys.version_info[:2]
+
+
 def managed_site_packages(venv=None):
+    """site-packages for the CURRENT interpreter's minor version only — never a
+    mismatched lib/pythonX.Y dir, so we never put ABI-incompatible wheels on the
+    path (which would crash imports instead of failing open)."""
     venv = venv or venv_dir()
-    cands = glob.glob(os.path.join(venv, "lib", "python*", "site-packages"))
-    cands.append(os.path.join(venv, "Lib", "site-packages"))  # Windows
-    for c in cands:
+    for c in (os.path.join(venv, "lib", _ver_tag(), "site-packages"),
+              os.path.join(venv, "Lib", "site-packages")):  # Windows
         if os.path.isdir(c):
             return c
     return None
@@ -100,13 +107,32 @@ def _venv_python(venv=None):
     return None
 
 
+def _venv_version(venv):
+    py = _venv_python(venv)
+    if not py:
+        return None
+    try:
+        out = subprocess.run([py, "-c", "import sys;print('%d.%d'%sys.version_info[:2])"],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             timeout=30, text=True)
+        return (out.stdout or "").strip() or None
+    except Exception:
+        return None
+
+
 def ensure_venv(venv=None):
+    """Return the managed venv's python, (re)building it if absent or if its minor
+    version no longer matches the running interpreter (else its wheels can't be
+    imported under a drifted python)."""
     venv = venv or venv_dir()
+    want = "%d.%d" % sys.version_info[:2]
     py = _venv_python(venv)
     if py:
-        return py
+        if _venv_version(venv) == want:
+            return py
+        shutil.rmtree(venv, ignore_errors=True)  # version drift -> rebuild
     os.makedirs(os.path.dirname(venv) or ".", exist_ok=True)
-    subprocess.run([sys.executable, "-m", "venv", venv], check=True,
+    subprocess.run([sys.executable, "-m", "venv", venv], check=True, timeout=300,
                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return _venv_python(venv)
 
@@ -172,10 +198,23 @@ def maybe_autostart(extras_str, max_lock_age=3600):
 
     lock = _lock_path()
     try:
-        if os.path.exists(lock) and (time.time() - os.path.getmtime(lock)) < max_lock_age:
-            return "dependency install already in progress"
         os.makedirs(os.path.dirname(lock) or ".", exist_ok=True)
-        with open(lock, "w") as f:
+        # Stale-lock takeover: a lock older than max_lock_age means the prior
+        # attempt finished or died — remove it so a failed install backs off ~1h
+        # rather than blocking forever (the child only removes the lock on success).
+        if os.path.exists(lock):
+            try:
+                if (time.time() - os.path.getmtime(lock)) < max_lock_age:
+                    return "dependency install already in progress"
+                os.remove(lock)
+            except OSError:
+                return "dependency install already in progress"
+        # Atomic create closes the check-then-act race between concurrent sessions.
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            return "dependency install already in progress"
+        with os.fdopen(fd, "w") as f:
             f.write(str(int(time.time())))
         logf = open(os.path.join(home(), "install.log"), "a")
         env = dict(os.environ)
@@ -203,7 +242,10 @@ def main(argv=None):
             extras = [e for e in argv[i + 1].replace("|", ",").split(",") if e.strip()]
 
     ok, log = install(extras, dry_run=dry)
-    if release_lock:
+    # Only clear the lock on SUCCESS. On failure the lock persists so
+    # maybe_autostart backs off (~max_lock_age) instead of re-downloading
+    # gigabytes every session.
+    if release_lock and ok:
         try:
             os.remove(_lock_path())
         except OSError:

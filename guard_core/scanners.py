@@ -19,11 +19,43 @@ they tolerate minor API differences.
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 
 _firewall = None
 _init_error = None
 _initialized = False
+
+_TIMEOUT = object()  # sentinel: work exceeded its wall-clock budget
+
+
+def _run_with_timeout(fn, seconds, default):
+    """Run fn() in a daemon thread; return its result, or `default` if it exceeds
+    `seconds`. A daemon thread won't block process exit, so a slow model load or
+    network judge can't pin a hot-path hook past its budget (we just fail open)."""
+    box = {}
+
+    def _run():
+        try:
+            box["r"] = fn()
+        except BaseException as e:  # noqa: BLE001 — propagate after join
+            box["e"] = e
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        return default
+    if "e" in box:
+        raise box["e"]
+    return box.get("r", default)
+
+
+def _timeout_secs(name, default):
+    try:
+        return float(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
 
 
 @dataclass
@@ -68,15 +100,26 @@ def _map_decision(d) -> str:
 
 
 def prompt_guard(text: str):
-    """Run Prompt Guard 2 on `text`. Returns ScanResult, or None if unavailable."""
-    fw = _ensure_firewall()
-    if fw is None:
-        return None
-    try:
+    """Run Prompt Guard 2 on `text`. Returns ScanResult, or None if unavailable.
+    Bounded by a wall-clock budget so a first-call model load/download can't hang
+    the PostToolUse hook (it fails open to allow on timeout)."""
+    budget = _timeout_secs("AIRLOCK_STAGE2_TIMEOUT", 8)
+
+    def _work():
+        fw = _ensure_firewall()
+        if fw is None:
+            return None
         from llamafirewall import UserMessage  # type: ignore
-        result = fw.scan(UserMessage(content=text))
+        return fw.scan(UserMessage(content=text))
+
+    try:
+        result = _run_with_timeout(_work, budget, _TIMEOUT)
     except Exception as e:
         return ScanResult(decision="allow", score=0.0, detail="prompt_guard error: %s" % e)
+    if result is _TIMEOUT:
+        return ScanResult(decision="allow", score=0.0, detail="prompt_guard timed out (>%ss)" % budget)
+    if result is None:
+        return None
     decision = _map_decision(getattr(result, "decision", None))
     score = getattr(result, "score", 0.0)
     try:
@@ -198,10 +241,14 @@ def align(trace_steps):
                 msgs.append(AssistantMessage(content=content))
         if not msgs:
             return ScanResult(decision="allow", score=0.0, detail="empty trace")
-        result = fw.scan_replay(msgs)
+        budget = _timeout_secs("AIRLOCK_ALIGN_TIMEOUT", 8)
+        result = _run_with_timeout(lambda: fw.scan_replay(msgs), budget, _TIMEOUT)
     except Exception as e:
         # Backend/network error -> fail open (no decision), don't block the host.
         return ScanResult(decision="allow", score=0.0, detail="alignment error: %s" % e)
+    if result is _TIMEOUT:
+        # LLM judge too slow -> fail open so the PreToolUse hook returns promptly.
+        return ScanResult(decision="allow", score=0.0, detail="alignment timed out")
 
     decision = _map_decision(getattr(result, "decision", None))
     score = getattr(result, "score", 0.0)

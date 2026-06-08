@@ -61,14 +61,19 @@ def main():
         _emit({})
         return 0
 
+    reanchor = reanchor_message(verdict, intent)
     out = {
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
-            "additionalContext": reanchor_message(verdict, intent),
+            "additionalContext": reanchor,
         }
     }
     if verdict.decision == "block":
-        out["hookSpecificOutput"]["decision"] = "block"
+        # PostToolUse reads the blocking decision at the TOP level (decision/reason),
+        # not inside hookSpecificOutput — keep both: top-level block feeds `reason`
+        # back to the model, additionalContext re-anchors regardless.
+        out["decision"] = "block"
+        out["reason"] = reanchor
         out["systemMessage"] = "airlock: blocked likely prompt injection in fetched content."
     _emit(out)
     return 0

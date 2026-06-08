@@ -26,10 +26,13 @@ from .verdict import assess
 # Default sinks treated as long-term memory on Claude Code (case-insensitive,
 # matched against the full path and the basename). Override/add with
 # AIRLOCK_MEMORY_PATHS (os.pathsep- or comma-separated fnmatch globs).
+# Globs are matched against the full path, the basename, AND every path suffix
+# (so they work for absolute, project-relative, and bare paths alike). Note
+# fnmatch '*' also spans '/'.
 _DEFAULT_MEMORY_GLOBS = [
-    "*/CLAUDE.md", "CLAUDE.md", "*/CLAUDE.local.md",
-    "*/memory/*", "*/memories/*", "*MEMORY*.md",
-    "*/.claude/*memory*", "*/rag/*", "*/knowledge/*",
+    "CLAUDE.md", "CLAUDE.local.md", "*MEMORY*.md", "*MEMORIES*.md",
+    "memory/*", "memories/*", "rag/*", "knowledge/*",
+    ".claude/*memory*",
 ]
 
 
@@ -51,16 +54,27 @@ def _globs():
 
 
 def is_memory_target(path: str) -> bool:
-    """True if `path` looks like a long-term memory / RAG sink."""
+    """True if `path` looks like a long-term memory / RAG sink.
+
+    Matches each glob against the full path, the basename, and every path suffix,
+    so absolute (`/proj/memory/n.md`), relative (`memory/n.md`) and bare
+    (`CLAUDE.md`) forms all match."""
     if not path:
         return False
     p = path.replace("\\", "/")
-    base = p.rsplit("/", 1)[-1]
-    low_p, low_b = p.lower(), base.lower()
+    if p.startswith("./"):
+        p = p[2:]
+    parts = [seg for seg in p.split("/") if seg and seg != "."]
+    cands = {p.lower()}
+    if parts:
+        cands.add(parts[-1].lower())                       # basename
+        for i in range(len(parts)):
+            cands.add("/".join(parts[i:]).lower())         # every suffix
     for g in _globs():
         gl = g.lower()
-        if fnmatch.fnmatch(low_p, gl) or fnmatch.fnmatch(low_b, gl):
-            return True
+        for c in cands:
+            if fnmatch.fnmatch(c, gl):
+                return True
     return False
 
 

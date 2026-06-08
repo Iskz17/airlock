@@ -20,6 +20,8 @@ _HERE = pathlib.Path(__file__).resolve()
 for _cand in (_HERE.parents[1], _HERE.parents[3]):
     sys.path.insert(0, str(_cand))
 
+_MAX_CHARS = 100000  # cap content scanned per memory write (injection shows early)
+
 
 def _emit(obj):
     sys.stdout.write(json.dumps(obj))
@@ -75,6 +77,7 @@ def main():
     if not content.strip():
         _emit({})
         return 0
+    content = content[:_MAX_CHARS]  # bound work on a 20s PreToolUse budget
 
     v = assess_memory_write(content, path=path)
     if v.decision == "allow":

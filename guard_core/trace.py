@@ -6,11 +6,35 @@ All functions are best-effort and never raise on malformed input.
 from __future__ import annotations
 
 import json
+import os
+
+
+def _read_lines_bounded(path, max_bytes=2000000, head_bytes=0):
+    """Read transcript lines without slurping an unbounded file into memory.
+
+    Reads the last `max_bytes` (the recent turns the hot-path hooks care about);
+    if `head_bytes` is set and the file is larger, also prepends the first chunk
+    so build_trace still sees the original user goal. Never raises."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            head = b""
+            if size > max_bytes:
+                if head_bytes:
+                    head = f.read(head_bytes)
+                f.seek(-max_bytes, os.SEEK_END)
+                f.readline()  # drop the partial first line after the seek
+            tail = f.read()
+        data = head + b"\n" + tail if head else tail
+        return data.decode("utf-8", "replace").splitlines()
+    except OSError:
+        return []
 
 
 def extract_text(tool_response) -> str:
     """Pull model-visible text out of a WebFetch/WebSearch tool_response, which
-    may be a str, a {text}/{type,text} dict, or a list of result blocks."""
+    may be a str, a {text}/{type,text} dict, or a list of result blocks (incl. the
+    real WebSearch shape: results=[{tool_use_id, content:[{title,url,content}]}, "<summary>"])."""
     if tool_response is None:
         return ""
     if isinstance(tool_response, str):
@@ -26,9 +50,15 @@ def extract_text(tool_response) -> str:
         parts = []
         for item in tool_response:
             if isinstance(item, dict):
-                joined = " ".join(
-                    str(item.get(k, "")) for k in ("title", "snippet", "content", "text", "url")
+                # Recurse into nested result blocks rather than repr-stringifying them.
+                nested = ""
+                if isinstance(item.get("content"), (list, dict)):
+                    nested = extract_text(item["content"])
+                scalar = " ".join(
+                    str(item.get(k, "")) for k in ("title", "snippet", "text", "url", "content")
+                    if not isinstance(item.get(k), (list, dict))
                 ).strip()
+                joined = (scalar + ("\n" + nested if nested else "")).strip()
                 if joined:
                     parts.append(joined)
             else:
@@ -43,11 +73,7 @@ def latest_user_intent(transcript_path: str, max_chars: int = 600) -> str:
     empty turns."""
     if not transcript_path:
         return ""
-    try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except OSError:
-        return ""
+    lines = _read_lines_bounded(transcript_path)
     for line in reversed(lines):
         line = line.strip()
         if not line:
@@ -60,7 +86,8 @@ def latest_user_intent(transcript_path: str, max_chars: int = 600) -> str:
             msg = obj.get("message", obj)
             content = msg.get("content") if isinstance(msg, dict) else None
             text = _content_to_text(content)
-            if text and not text.lstrip().startswith("["):  # skip tool-result echoes
+            # skip tool-result echoes, but NOT genuine prose that merely starts with '['
+            if text and not text.lstrip().startswith("[tool_result"):
                 return text[:max_chars]
     return ""
 
@@ -69,11 +96,7 @@ def latest_assistant_text(transcript_path: str, max_chars: int = 20000) -> str:
     """Best-effort: the most recent assistant prose, for the Stop-hook egress scan."""
     if not transcript_path:
         return ""
-    try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except OSError:
-        return ""
+    lines = _read_lines_bounded(transcript_path)
     for line in reversed(lines):
         line = line.strip()
         if not line:
@@ -102,11 +125,8 @@ def build_trace(transcript_path: str, max_steps: int = 24, max_chars: int = 2000
     """
     if not transcript_path:
         return []
-    try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except OSError:
-        return []
+    # Keep the head (original user goal) even for very large transcripts.
+    lines = _read_lines_bounded(transcript_path, head_bytes=65536)
 
     steps = []
     for line in lines:

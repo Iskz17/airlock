@@ -28,7 +28,7 @@ _SECRET_PATTERNS = [
     ("slack_token", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
     ("jwt", r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b"),
     ("bearer_token", r"(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}"),
-    ("private_key_block", r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----"),
+    ("private_key_block", r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----"),
     ("secret_assignment",
      r"(?i)\b(api[_-]?key|secret|token|password|passwd|client[_-]?secret|access[_-]?token)\b"
      r"\s*[:=]\s*['\"]?[A-Za-z0-9_\-./+]{16,}"),
@@ -48,6 +48,11 @@ _MD_LINK_RX = re.compile(r"(?<!\!)\[[^\]]*\]\(\s*<?(https?://[^)\s>]+)>?[^)]*\)"
 _MD_REF_DEF_RX = re.compile(r"(?m)^\s*\[[^\]]+\]:\s*<?(https?://\S+?)>?\s*$")
 _AUTOLINK_RX = re.compile(r"<(https?://[^>]+)>")
 _BARE_URL_RX = re.compile(r"https?://[^\s'\"<>)]+")
+# HTML sinks — auto-fetched by most chat/markdown renderers (the EchoLeak surface).
+# img/source[/srcset] and CSS url() are image-class (auto-fetch, weight>=2); a/link href is link-class.
+_HTML_IMG_RX = re.compile(r"(?i)<(?:img|image|source|iframe|audio|video|embed)\b[^>]*?\b(?:src|srcset)\s*=\s*[\"']?\s*(https?://[^\"'\s>]+)")
+_HTML_LINK_RX = re.compile(r"(?i)<(?:a|link)\b[^>]*?\bhref\s*=\s*[\"']?\s*(https?://[^\"'\s>]+)")
+_CSS_URL_RX = re.compile(r"(?i)url\(\s*[\"']?\s*(https?://[^\"'\s)]+)")
 
 
 @dataclass
@@ -108,18 +113,31 @@ def _url_is_exfil(url, allow):
         return None
     if find_secrets(url):
         return EgressFinding("exfil_url", "secret_in_url", _clip(url), 3)
-    for _k, v in parse_qsl(u.query, keep_blank_values=True):
+    # Query + fragment can both carry exfil (fragment is never sent to the server
+    # but IS read by client-side script / trackers, and is a common smuggle spot).
+    pairs = parse_qsl(u.query, keep_blank_values=True) + parse_qsl(u.fragment, keep_blank_values=True)
+    total = 0
+    for _k, v in pairs:
+        total += len(v)
         if len(v) >= 24:
             return EgressFinding("exfil_url", "data_param", _clip(url), 1)
-    if re.search(r"/[A-Za-z0-9+/_\-]{32,}={0,2}(?:/|$)", u.path or ""):
-        return EgressFinding("exfil_url", "data_path", _clip(url), 1)
+    # Split-across-many-params / userinfo / raw fragment evasion: flag on volume too.
+    if total >= 40 or len((u.username or "") + (u.password or "")) >= 24 \
+            or (u.fragment and "=" not in u.fragment and len(u.fragment) >= 24):
+        return EgressFinding("exfil_url", "data_param", _clip(url), 1)
+    # base64-ish run in a path segment, tolerating a trailing extension/segment.
+    for seg in (u.path or "").split("/"):
+        if re.search(r"[A-Za-z0-9+/_\-]{32,}={0,2}", seg):
+            return EgressFinding("exfil_url", "data_path", _clip(url), 1)
     return None
 
 
 def find_markdown_sinks(text, allow):
     findings, sanitized, seen = [], text, set()
     for rx, kind in ((_MD_IMAGE_RX, "image"), (_MD_LINK_RX, "link"),
-                     (_MD_REF_DEF_RX, "ref"), (_AUTOLINK_RX, "autolink")):
+                     (_MD_REF_DEF_RX, "ref"), (_AUTOLINK_RX, "autolink"),
+                     (_HTML_IMG_RX, "image"), (_HTML_LINK_RX, "link"),
+                     (_CSS_URL_RX, "image")):
         for m in rx.finditer(text):
             url = m.group(1)
             f = _url_is_exfil(url, allow)

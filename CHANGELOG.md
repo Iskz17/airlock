@@ -2,6 +2,39 @@
 
 All notable changes to airlock are documented here. Versions follow semver.
 
+## [0.2.2] — 2026-06-08
+
+Security hardening from an adversarial red-team code review (24 verified findings;
+21 fixed). Each fix is pinned by a regression test in `tests/test_redteam_fixes.py`.
+
+### Fixed
+- **Egress (Stage 4):** detect **HTML `<img>`/`<a>`/`<source>` and CSS `url()`
+  exfil sinks** (previously only Markdown was caught — a real EchoLeak gap);
+  catch `data_path` with trailing extensions, split/short `data_param`s, and
+  **URL-fragment** exfil; match `ENCRYPTED`/PKCS#8 `PRIVATE KEY` headers.
+- **Ingress (Claude Code):** PostToolUse block decision is now emitted at the
+  **top level** (`decision`/`reason`) — it was nested in `hookSpecificOutput`,
+  where Claude Code ignored it, so the high-confidence block never fired.
+- **Persistence (Stage 5):** `is_memory_target` now matches **relative/bare**
+  memory paths (`memory/x.md`, `CLAUDE.local.md`), not just `*/`-anchored ones;
+  memory-gate caps scanned content.
+- **Installer:** managed venv is **version-pinned** (rebuilds on python
+  minor-version drift instead of silently breaking imports); auto-install lock
+  clears **only on success** (no more multi-GB retry every session); atomic lock
+  create; venv-create timeout.
+- **Hot-path safety:** Stage 2 model-load and Stage 3 network judge now have
+  wall-clock timeouts (fail open fast); sidecar caps request body + socket
+  timeout; transcript readers are bounded (no full-file slurp).
+- **trace:** real WebSearch `tool_response` shape parsed (not repr-stringified);
+  genuine user prose starting with `[` no longer dropped.
+- **openclaw:** reply rewrite is driven off the egress decision and redacts
+  secret/PII snippets (not just sink URLs); optional `AIRLOCK_REPLY_BLOCK`.
+
+### Verified
+- 144 offline checks; `tsc` clean; openclaw TS↔Python round-trip; plugin validates.
+- **Live in-session smoke test:** SessionStart, PreToolUse (Bash), and Stop hooks
+  confirmed firing in a real `claude` session with valid, accepted hook output.
+
 ## [0.2.1] — 2026-06-08
 
 ### Changed

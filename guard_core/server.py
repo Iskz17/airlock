@@ -104,8 +104,12 @@ def _health():
     }}
 
 
+_MAX_BODY = 8 * 1024 * 1024  # 8 MB cap on request bodies (loopback, but bound it)
+
+
 class _Handler(BaseHTTPRequestHandler):
     server_version = "airlock-sidecar/1.0"
+    timeout = 15  # per-request socket timeout so a stalled client can't pin a thread
 
     def log_message(self, *a):  # keep the sidecar quiet
         pass
@@ -134,6 +138,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
+            if length > _MAX_BODY:
+                self._send(413, {"error": "request too large"})
+                return
             raw = self.rfile.read(length) if length else b""
             payload = json.loads(raw or b"{}")
             if not isinstance(payload, dict):

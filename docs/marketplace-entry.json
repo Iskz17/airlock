@@ -1,16 +1,25 @@
 {
-  "_comment": "Submission entry for Anthropic's official `claude-plugins-official` directory. External plugins are NOT added by pull request — submit via the form at https://clau.de/plugin-directory-submission (quality + security review). This is the marketplace entry that would represent airlock once approved; it also documents the canonical source/ref/sha. Self-hosting needs none of this — `/plugin marketplace add Iskz17/airlock` already works today.",
+  "_comment": "Submission entry for Anthropic's official `claude-plugins-official` directory. External plugins are NOT added by pull request \u2014 submit via the form at https://clau.de/plugin-directory-submission (quality + security review). This is the marketplace entry that would represent airlock once approved; it also documents the canonical source/ref/sha. Self-hosting needs none of this \u2014 `/plugin marketplace add Iskz17/airlock` already works today.",
   "name": "airlock",
   "description": "Layered prompt-injection / agent-security guard. Scans WebFetch/WebSearch content for injection (incl. invisible-Unicode ASCII smuggling), gates outbound exfiltration of secrets/PII and Markdown-URL sinks (EchoLeak), checks task drift before sensitive actions, vets installed MCP servers for tool poisoning, and blocks poisoned memory writes.",
-  "author": { "name": "Iskz17" },
+  "author": {
+    "name": "Iskz17"
+  },
   "category": "security",
   "source": {
     "source": "git-subdir",
     "url": "https://github.com/Iskz17/airlock.git",
     "path": "adapters/claude-code",
     "ref": "v0.2.2",
-    "sha": "0f62d721fe4fbbef1e615bd62db110f9d23214a0"
+    "sha": "7ab88f24d0e5e99d0df34a9165fdd9a6bfe11429"
   },
   "homepage": "https://github.com/Iskz17/airlock",
-  "keywords": ["security", "prompt-injection", "guardrails", "ascii-smuggling", "exfiltration", "mcp"]
+  "keywords": [
+    "security",
+    "prompt-injection",
+    "guardrails",
+    "ascii-smuggling",
+    "exfiltration",
+    "mcp"
+  ]
 }

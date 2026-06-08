@@ -29,18 +29,29 @@ A layered prompt-injection / agent-security guard with a **shared core** and **t
 claude --plugin-dir /Users/iskandarzulkarnain/airlock/adapters/claude-code
 ```
 
-Stages 0–1 work immediately with only Python 3 (stdlib). To enable Stage 2:
+Stages 0–1 (and the offline parts of 4/5/6) work **immediately** with only Python 3 (stdlib) — nothing to download.
+
+### Enabling the heavier stages
+
+The optional detectors (Stage 2 Prompt Guard 2, Stage 2b OCR, Stage 6 mcp-scan) are opt-in. The easiest way is airlock's own installer, which puts them in an **isolated managed venv** (`~/.cache/airlock/venv`; never your system Python — uninstall by deleting that folder):
 
 ```bash
-pip install llamafirewall            # then: huggingface-cli login  (one-time model download)
+/airlock-setup                 # in a Claude Code session — installs Stage 2 (promptguard) by default
+/airlock-setup all             # everything (promptguard, pii, ocr, mcp)
+airlock-setup --extras ocr     # or the CLI equivalent (pip install of this repo provides it)
 ```
 
-The plugin vendors the guard core (via a symlink), so no install is needed to run it. To use the core as a library or get the `airlock-scan` CLI:
+Or set it and forget it — install in the background on first session (off by default, non-blocking, never silent):
 
 ```bash
-pip install -e ~/airlock                 # core, stdlib only
-pip install -e "~/airlock[promptguard]"  # + Stage 2 Prompt Guard 2
-pip install -e "~/airlock[pii]"          # + Stage 4 Presidio PII
+export AIRLOCK_AUTO_INSTALL=1                       # default extras: promptguard
+export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: choose extras
+```
+
+Notes: **OCR** also needs the system `tesseract` binary (`brew install tesseract` / `apt-get install tesseract-ocr`). **Stage 3 (task-drift)** can't be installed — it needs a backend (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or Ollama). You can still install extras straight into your own environment instead:
+
+```bash
+pip install "airlock-guard-core[promptguard]"   # or [pii] / [ocr] / [mcp] / [all]
 ```
 
 ## Use
@@ -68,6 +79,9 @@ pip install -e "~/airlock[pii]"          # + Stage 4 Presidio PII
 | `AIRLOCK_MCP_SCAN` | off | `1` → also run Invariant `mcp-scan` (network) for Stage 6 |
 | `AIRLOCK_MEMORY_PATHS` | empty | extra fnmatch globs treated as memory sinks (Stage 5) |
 | `AIRLOCK_MEMORY_BLOCK` | off | `1` → deny (not ask) a poisoned memory write |
+| `AIRLOCK_AUTO_INSTALL` | off | `1` → background-install heavier extras into the managed venv on first session |
+| `AIRLOCK_AUTO_INSTALL_EXTRAS` | `promptguard` | which extras to auto-install (`promptguard,ocr,…` or `all`) |
+| `AIRLOCK_HOME` | `~/.cache/airlock` | where the managed dependency venv lives |
 | `AIRLOCK_SIDECAR_PORT` | `8787` | loopback port for the openclaw sidecar (`python3 -m guard_core.server`) |
 
 ## Layout

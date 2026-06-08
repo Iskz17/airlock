@@ -41,6 +41,11 @@ def _ensure_firewall():
         return _firewall
     _initialized = True
     try:
+        from .installer import add_managed_to_path
+        add_managed_to_path()
+    except Exception:
+        pass
+    try:
         from llamafirewall import LlamaFirewall, Role, ScannerType  # type: ignore
     except Exception as e:  # ImportError or transitive failure
         _init_error = "llamafirewall unavailable: %s" % e
@@ -127,6 +132,11 @@ def _ensure_align_firewall():
         _align_init_error = "no alignment backend configured (set TOGETHER_API_KEY or AIRLOCK_ALIGN_BACKEND=ollama)"
         return None
 
+    try:
+        from .installer import add_managed_to_path
+        add_managed_to_path()
+    except Exception:
+        pass
     try:
         from llamafirewall import LlamaFirewall, Role, ScannerType  # type: ignore
     except Exception as e:

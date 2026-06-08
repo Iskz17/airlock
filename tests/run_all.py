@@ -5,7 +5,7 @@ import sys
 
 _HERE = pathlib.Path(__file__).resolve().parent
 _SUITES = ["test_core.py", "test_egress.py", "test_more.py", "test_mcp.py",
-           "test_alignment.py", "test_server.py", "test_persistence.py"]
+           "test_alignment.py", "test_server.py", "test_persistence.py", "test_installer.py"]
 
 
 def main():

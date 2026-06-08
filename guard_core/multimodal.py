@@ -41,6 +41,11 @@ def _allow(available=False, backend="", error=""):
 
 def _tesseract_ocr(image_path):
     """Default OCR backend: pytesseract + Pillow. Raises if unavailable."""
+    try:
+        from .installer import add_managed_to_path
+        add_managed_to_path()
+    except Exception:
+        pass
     import pytesseract  # type: ignore
     from PIL import Image, ImageOps  # type: ignore
 
@@ -60,6 +65,11 @@ def _tesseract_ocr(image_path):
 
 def ocr_available() -> bool:
     """Cheap probe: are the default OCR deps importable?"""
+    try:
+        from .installer import add_managed_to_path
+        add_managed_to_path()
+    except Exception:
+        pass
     try:
         import pytesseract  # type: ignore  # noqa: F401
         from PIL import Image  # type: ignore  # noqa: F401

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """SessionStart: report airlock readiness.
 
-Stages 0–1 are always available (stdlib only). Stage 2 (Prompt Guard 2) needs
-`llamafirewall`; if it's missing we stay in the offline ladder and just inform
-the user — we deliberately do NOT auto-install heavy deps at session start.
-Always exits 0.
+Stages 0–1 are always available (stdlib only). The heavier stages are opt-in:
+set AIRLOCK_AUTO_INSTALL=1 (extras via AIRLOCK_AUTO_INSTALL_EXTRAS, default
+`promptguard`) to have airlock install them into its managed venv in the
+background on first run — non-blocking and never silent. Otherwise we just stay
+in the offline ladder and say so. Always exits 0.
 """
 import json
+import os
 import pathlib
 import sys
 
@@ -31,10 +33,23 @@ def main():
 
     ingress = "Stages 0–2 (invisible-Unicode + heuristics + Prompt Guard 2)" \
         if avail.get("prompt_guard") else \
-        "Stage 0 invisible-Unicode + Stage 1 heuristics (offline; pip install llamafirewall for Stage 2)"
+        "Stage 0 invisible-Unicode + Stage 1 heuristics (offline)"
     action = "Stage 3 task-drift on" if align_on else "Stage 3 task-drift off (no align backend)"
     msg = ("airlock active — ingress: %s; egress exfil guard (Stage 4); MCP vetting (Stage 6); "
            "memory-write guard (Stage 5); %s." % (ingress, action))
+
+    # Opt-in background install of the heavier extras into airlock's managed venv.
+    if os.environ.get("AIRLOCK_AUTO_INSTALL", "0").strip().lower() not in ("0", "false", "no", "off", ""):
+        try:
+            from guard_core.installer import maybe_autostart
+            note = maybe_autostart(os.environ.get("AIRLOCK_AUTO_INSTALL_EXTRAS", "promptguard"))
+            if note:
+                msg += " [auto-install: %s]" % note
+        except Exception:
+            pass
+    elif not avail.get("prompt_guard"):
+        msg += " Run /airlock-setup (or set AIRLOCK_AUTO_INSTALL=1) to enable Stage 2."
+
     sys.stdout.write(json.dumps({"systemMessage": msg}))
     return 0
 

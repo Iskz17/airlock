@@ -37,6 +37,7 @@ all = ["llamafirewall", "presidio-analyzer", "presidio-anonymizer", "pytesseract
 
 [project.scripts]
 airlock-scan = "guard_core.cli:main"
+airlock-setup = "guard_core.installer:main"
 
 [tool.setuptools]
 packages = ["guard_core"]

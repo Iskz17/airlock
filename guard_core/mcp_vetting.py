@@ -226,6 +226,15 @@ def _mcp_scan_cmd(config_paths):
     base_args = ["scan", "--json"] + list(config_paths)
     if shutil.which("mcp-scan"):
         return ["mcp-scan"] + base_args
+    # airlock's managed venv (populated by `/airlock-setup mcp`).
+    try:
+        from .installer import venv_dir
+        for rel in ("bin/mcp-scan", "Scripts/mcp-scan.exe"):
+            cand = os.path.join(venv_dir(), rel)
+            if os.path.exists(cand):
+                return [cand] + base_args
+    except Exception:
+        pass
     if shutil.which("uvx"):
         return ["uvx", "mcp-scan@latest"] + base_args
     return None

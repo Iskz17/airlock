@@ -1,6 +1,6 @@
 {
   "name": "airlock",
   "description": "Layered prompt-injection / agent-security guard. Ingress scan of WebFetch/WebSearch content (invisible-Unicode 'ASCII smuggling' + heuristics + Prompt Guard 2), egress exfiltration gate (secrets/PII + Markdown-URL sinks), task-drift (AlignmentCheck), MCP supply-chain vetting, and a memory-write poisoning guard.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": { "name": "airlock" }
 }

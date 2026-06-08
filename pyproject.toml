@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "airlock-guard-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Layered, harness-agnostic prompt-injection / agent-security guard core (ingress, action, egress, persistence, supply-chain)."
 readme = "README.md"
 requires-python = ">=3.9"

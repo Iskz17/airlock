@@ -44,7 +44,7 @@ Release versioning — keep `plugin.json` and the marketplace entry in agreement
 and tag releases with the built-in helper:
 
 ```bash
-claude plugin tag adapters/claude-code     # creates airlock--v0.2.2, validates agreement
+claude plugin tag adapters/claude-code     # creates airlock--v0.2.3, validates agreement
 ```
 
 To also appear in the **official directory** (`claude-plugins-official`), external
@@ -61,7 +61,7 @@ pinned to the release `ref` + `sha`). Bump it on each release.
 
 ```bash
 python3 -m pip install --upgrade build twine
-python3 -m build                 # -> dist/airlock_guard_core-0.2.2{.tar.gz,-py3-none-any.whl}
+python3 -m build                 # -> dist/airlock_guard_core-0.2.3{.tar.gz,-py3-none-any.whl}
 twine upload dist/*              # needs a PyPI token
 ```
 

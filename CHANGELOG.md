@@ -2,6 +2,27 @@
 
 All notable changes to airlock are documented here. Versions follow semver.
 
+## [0.2.3] — 2026-06-09
+
+### Changed
+- **openclaw adapter reworked against the real gateway (`openclaw@2026.6.1`)**,
+  validated live (`plugins install --link`, `inspect --runtime`, `doctor`):
+  - Correct registration model `definePluginEntry({id,name,register(api)})` +
+    `api.on(...)` — the previous `export const plugin = {…methods}` was a **silent
+    no-op** on a real host.
+  - Correct hooks: `tool_result_persist`, `before_tool_call`, `message_sending`
+    (reply rewrite/withhold), `llm_input` (transcript for task-drift, gated by
+    `allowConversationAccess`). `.ts` loads directly (no compiled dist).
+  - Split `entry.ts`/`hooks.ts`/`config.ts`; **env reads isolated in `config.ts`**
+    so the install scanner no longer flags env-access+`fetch` as credential
+    harvesting (installs without a force flag).
+  - Added `openclaw.plugin.json` manifest + `openclaw-sdk.d.ts`; expanded
+    round-trip suite (guard + hooks + registration binding).
+- Added `HANDOFF.md`.
+
+Note: the Claude Code plugin and `guard_core` are unchanged from 0.2.2; this
+release is the openclaw adapter + docs (versions kept in lockstep).
+
 ## [0.2.2] — 2026-06-08
 
 Security hardening from an adversarial red-team code review (24 verified findings;

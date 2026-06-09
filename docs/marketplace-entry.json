@@ -10,7 +10,7 @@
     "source": "git-subdir",
     "url": "https://github.com/Iskz17/airlock.git",
     "path": "adapters/claude-code",
-    "ref": "v0.2.2",
+    "ref": "v0.2.3",
     "sha": "7ab88f24d0e5e99d0df34a9165fdd9a6bfe11429"
   },
   "homepage": "https://github.com/Iskz17/airlock",

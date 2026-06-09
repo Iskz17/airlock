@@ -1,0 +1,14 @@
+{
+  "id": "airlock",
+  "name": "airlock",
+  "description": "Prompt-injection / exfiltration guard for OpenClaw: true-strip injected tool output (tool_result_persist), gate data-exfil tool calls (before_tool_call), and neutralize exfil sinks / redact secrets in outgoing replies (message_sending). Backed by the shared airlock Python guard core over a loopback HTTP sidecar.",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

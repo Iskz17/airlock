@@ -4,6 +4,10 @@
 // (`python3 -m guard_core.server`), so Stages 0/1/2/3/4/6 are NOT reimplemented
 // in TypeScript. Every call FAILS OPEN: if the sidecar is unreachable or errors,
 // the result is a benign "allow" so the host agent is never broken by the guard.
+//
+// Sidecar coordinates are resolved in config.ts (no env access lives in this
+// transport module — see config.ts for why).
+import { SIDECAR_BASE_URL as BASE_URL, SIDECAR_TIMEOUT_MS as TIMEOUT_MS } from "./config.ts";
 
 export interface IngressVerdict {
   decision: "allow" | "flag" | "block";
@@ -44,12 +48,6 @@ export interface TraceStep {
   role: "user" | "assistant";
   content: string;
 }
-
-const BASE_URL =
-  process.env.AIRLOCK_SIDECAR_URL ??
-  `http://127.0.0.1:${process.env.AIRLOCK_SIDECAR_PORT ?? "8787"}`;
-
-const TIMEOUT_MS = Number(process.env.AIRLOCK_SIDECAR_TIMEOUT_MS ?? "4000");
 
 async function post<T>(path: string, body: unknown, failOpen: T): Promise<T> {
   const ctrl = new AbortController();

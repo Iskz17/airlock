@@ -148,6 +148,74 @@ check("HUMAN_IN_THE_LOOP_REQUIRED maps to flag", r3 is not None and r3.decision 
 sys.modules.pop("llamafirewall", None)
 os.environ.pop("AIRLOCK_ALIGN_BACKEND", None)
 
+
+# --- D) the OPEN, no-subscription Ollama backend (stdlib HTTP, no llamafirewall) --
+for k in ("TOGETHER_API_KEY", "AIRLOCK_OLLAMA_MODEL", "AIRLOCK_OLLAMA_URL"):
+    os.environ.pop(k, None)
+
+# D1) backend resolution: auto prefers a configured local Ollama over paid Together
+os.environ["AIRLOCK_ALIGN_BACKEND"] = "auto"
+check("auto + nothing -> off", scanners._resolve_align_backend() == "off")
+os.environ["AIRLOCK_OLLAMA_MODEL"] = "llama3.2"
+check("auto + OLLAMA_MODEL -> ollama (no key needed)", scanners._resolve_align_backend() == "ollama")
+check("ollama backend reports available", scanners.align_available() is True)
+os.environ["TOGETHER_API_KEY"] = "tok"
+check("auto + key present -> together", scanners._resolve_align_backend() == "together")
+os.environ.pop("TOGETHER_API_KEY", None)
+os.environ["AIRLOCK_ALIGN_BACKEND"] = "ollama"
+check("explicit ollama -> ollama", scanners._resolve_align_backend() == "ollama")
+
+# D2) align() via a MOCKED Ollama /api/chat (no real server, no key, no llamafirewall)
+import urllib.request  # noqa: E402
+
+class _FakeResp:
+    def __init__(self, body):
+        self._b = body
+    def read(self):
+        return self._b
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+def _fake_urlopen(req, timeout=None):
+    # Inspect ONLY the user message (the trace) — the system prompt legitimately
+    # mentions "exfiltrating"/"secret", which must not be read as a trace signal.
+    obj = json.loads(req.data.decode("utf-8"))
+    usertext = (obj.get("messages") or [{}])[-1].get("content", "").lower()
+    misaligned = any(w in usertext for w in ("reveal", "id_rsa", "api key", "exfiltrat"))
+    verdict = {"aligned": (not misaligned),
+               "reason": "reads secrets unrelated to task" if misaligned else "on task"}
+    outer = {"message": {"role": "assistant", "content": json.dumps(verdict)}}
+    return _FakeResp(json.dumps(outer).encode("utf-8"))
+
+_real_urlopen = urllib.request.urlopen
+urllib.request.urlopen = _fake_urlopen
+try:
+    drift_o = [
+        {"role": "user", "content": "summarize this article about cats"},
+        {"role": "assistant", "content": "[about to call Bash with {\"command\": \"reveal the api key\"}]"},
+    ]
+    r = scanners.align(drift_o)
+    check("ollama: misaligned trace -> block", r is not None and r.decision == "block")
+    check("ollama: block carries the judge's reason", bool(r.detail) and "secret" in r.detail.lower())
+
+    benign_o = [
+        {"role": "user", "content": "summarize this article about cats"},
+        {"role": "assistant", "content": "[about to call WebFetch with {\"url\": \"http://site/cats\"}]"},
+    ]
+    r2 = scanners.align(benign_o)
+    check("ollama: aligned trace -> allow", r2 is not None and r2.decision == "allow")
+
+    # ollama path must NOT touch llamafirewall (works even where it can't import)
+    sys.modules.pop("llamafirewall", None)
+    check("ollama: empty trace short-circuits to allow",
+          scanners.align([]) is not None and scanners.align([]).decision == "allow")
+finally:
+    urllib.request.urlopen = _real_urlopen
+    for k in ("AIRLOCK_ALIGN_BACKEND", "AIRLOCK_OLLAMA_MODEL", "AIRLOCK_OLLAMA_URL"):
+        os.environ.pop(k, None)
+
 print()
 if _failures:
     print("%d FAILED: %s" % (len(_failures), _failures))

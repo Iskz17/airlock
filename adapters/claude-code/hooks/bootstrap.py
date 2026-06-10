@@ -34,7 +34,8 @@ def main():
     ingress = "Stages 0–2 (invisible-Unicode + heuristics + ML classifier)" \
         if avail.get("prompt_guard") else \
         "Stage 0 invisible-Unicode + Stage 1 heuristics (offline)"
-    action = "Stage 3 task-drift on" if align_on else "Stage 3 task-drift off (no align backend)"
+    action = "Stage 3 task-drift on" if align_on else \
+        "Stage 3 task-drift off (set AIRLOCK_ALIGN_BACKEND=ollama for a free local judge)"
     msg = ("airlock active — ingress: %s; egress exfil guard (Stage 4); MCP vetting (Stage 6); "
            "memory-write guard (Stage 5); %s." % (ingress, action))
 

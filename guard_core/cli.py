@@ -5,6 +5,7 @@ Usage:
   python -m guard_core.cli --json     # stdin is {"text": "...", "intent": "..."}
   python -m guard_core.cli --egress   # scan stdin as outbound content (Stage 4)
   python -m guard_core.cli --mcp      # vet installed MCP servers (Stage 6); ignores stdin
+  python -m guard_core.cli --align    # task-drift judge (Stage 3); stdin = {"steps":[{role,content}]}
   python -m guard_core.cli --image PATH  # OCR an image + ingress scan (Stage 2b)
 
 Adapters (Claude Code hook, openclaw plugin, /scan command) call this or import
@@ -60,6 +61,30 @@ def main(argv=None) -> int:
         }
         sys.stdout.write(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
         return 0 if r.decision == "allow" else 2
+
+    if "--align" in argv:
+        # Stage 3 task-drift verifier — handy for confirming a local Ollama judge
+        # works end-to-end (set AIRLOCK_ALIGN_BACKEND=ollama + AIRLOCK_OLLAMA_MODEL).
+        from .scanners import align, align_status
+        raw = sys.stdin.read()
+        steps = []
+        try:
+            obj = json.loads(raw) if raw.strip() else {}
+            steps = obj.get("steps") or obj.get("trace") or []
+        except json.JSONDecodeError:
+            steps = []
+        status = align_status()
+        r = align(steps) if steps else None
+        out = {
+            "backend": status.get("backend"),
+            "available": status.get("alignment"),
+            "model": status.get("model"),
+            "decision": (r.decision if r else None),
+            "score": (r.score if r else None),
+            "reason": (r.detail if r else None),
+        }
+        sys.stdout.write(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
+        return 0 if (r is None or r.decision == "allow") else 2
 
     raw = sys.stdin.read()
 

@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: core ${{ matrix.os }} py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.9"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run guard-core test suite (stdlib only)
+        run: python tests/run_all.py
+
+  manifests:
+    name: manifests + version agreement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate JSON manifests and version lockstep
+        run: |
+          python - <<'PY'
+          import json
+          pj = json.load(open("adapters/claude-code/.claude-plugin/plugin.json"))
+          mp = json.load(open(".claude-plugin/marketplace.json"))
+          json.load(open("adapters/claude-code/hooks/hooks.json"))          # must parse
+          json.load(open("adapters/openclaw/openclaw.plugin.json"))         # must parse
+          entry = [p for p in mp["plugins"] if p["name"] == "airlock"][0]
+          assert pj["version"] == entry["version"], \
+              "plugin.json %s != marketplace %s" % (pj["version"], entry["version"])
+          # pyproject + openclaw package.json should match too
+          import re
+          pyver = re.search(r'(?m)^version\s*=\s*"([^"]+)"', open("pyproject.toml").read()).group(1)
+          ocver = json.load(open("adapters/openclaw/package.json"))["version"]
+          assert pyver == pj["version"] == ocver, (pyver, pj["version"], ocver)
+          print("manifests OK; all components at", pj["version"])
+          PY
+
+  openclaw:
+    name: openclaw adapter (tsc + sidecar round-trip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install TS dev deps
+        working-directory: adapters/openclaw
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        working-directory: adapters/openclaw
+        run: npm run typecheck
+      - name: Round-trip against the live Python sidecar
+        run: |
+          PYTHONPATH="$PWD" python -m guard_core.server &
+          SIDECAR=$!
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8787/health >/dev/null && break
+            sleep 0.5
+          done
+          cd adapters/openclaw && npm test
+          status=$?
+          kill $SIDECAR 2>/dev/null || true
+          exit $status

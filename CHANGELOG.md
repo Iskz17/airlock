@@ -4,6 +4,36 @@ All notable changes to airlock are documented here. Versions follow semver.
 
 ## [Unreleased]
 
+### Added — Stage 3 task-drift now has an open, no-subscription backend (Ollama)
+- **Local Ollama judge for Stage 3 (AlignmentCheck)** — talks directly to a local
+  Ollama server over HTTP (**stdlib `urllib` only**): no API key, no subscription,
+  and **no `llamafirewall`**, so it works even on Python 3.9 (where llamafirewall
+  can't import — `from typing import TypeAlias` is 3.10+). Set
+  `AIRLOCK_ALIGN_BACKEND=ollama` (+ `AIRLOCK_OLLAMA_MODEL`, default `llama3.2`,
+  `AIRLOCK_OLLAMA_URL`). `auto` now **prefers a configured local Ollama over the
+  paid Together API**. Previously `ollama` was documented but never actually wired
+  (it silently fell back to Together). Fails open fast if the server is down
+  (connection-refused is instant). New `python -m guard_core.cli --align` verifier.
+- The untrusted trace is delimited and the judge is instructed to treat it as
+  data, not instructions (the judge-injection failure mode).
+
+### Ingress — closed the curl/wget Bash-fetch bypass
+- **New PostToolUse-on-Bash scan** (`scan_bash_output.py` + `guard_core.bash_ingress`):
+  content fetched with `curl`/`wget`/`xh`/`lynx`/… through the Bash tool was never
+  ingress-scanned (a documented gap). It now runs Stages 0–2 + re-anchor on the
+  stdout of a *fetch* command. High-precision: a known fetch CLI as a command word
+  **and** an explicit URL — ordinary Bash (`cat`/`grep`/`git`) is never scanned, so
+  there's no FP surface or hot-path cost. Toggle: `AIRLOCK_SCAN_BASH_OUTPUT`.
+
+### Fixed — red-team (expanded-corpus + second pass)
+- **False positive:** `sensitive_file_read` matched `.env` inside `.env.example`
+  (and `.sample`/`.template`/`.dist`/`.defaults`), hard-blocking benign dev docs.
+  Now excludes those placeholder files; real `.env` / `.env.local` / `~/.ssh` /
+  `~/.aws/credentials` still block. Pinned by regression tests.
+- **Mislabel:** the re-anchor said "Prompt Guard 2 flagged injection" even when the
+  default **open** classifier (protectai deberta) fired. Now backend-accurate
+  ("Stage 2 injection classifier flagged").
+
 ### Changed — Stage 2 needs no account/login/subscription
 - **Default Stage 2 backend is now an UNGATED, openly-licensed classifier**
   (`protectai/deberta-v3-base-prompt-injection-v2`, Apache-2.0) — **no Hugging Face
@@ -14,9 +44,16 @@ All notable changes to airlock are documented here. Versions follow semver.
   (`AIRLOCK_STAGE2_BACKEND=promptguard` + `/airlock-setup llamafirewall`); its model
   is gated. The `promptguard` extra / `all` are now fully ungated (torch +
   transformers + sentencepiece); `llamafirewall` is a separate, non-`all` extra.
-- **Stage 2 block threshold tuned to 0.98** (from 0.8) on a hard-negative eval
-  corpus (`tests/eval_stage2.py`): 0 false positives, recall unchanged (precision
-  1.000 / recall 0.850 / F1 0.919). Eval harness added for reproducibility.
+- **Stage 2 block threshold set to 0.98** (from 0.8). On the original 42-item
+  corpus this read as precision 1.000 / recall 0.850 / 0 FP — but the
+  **expanded 93-item corpus** (realistic security-adjacent prose, code, CLI
+  output, multilingual) shows the open classifier is genuinely noisy:
+  **precision ≈0.74, recall ≈0.90, ~25% FP**, and the scores are *not* bimodal
+  (benign "OWASP lists prompt injection…" scores 1.000), so no threshold
+  separates them. Stage 2 **keeps its block authority by default** (max recall);
+  if false positives matter in your context, raise `AIRLOCK_STAGE2_BLOCK_SCORE`,
+  set `AIRLOCK_STAGE2=0`, or rely on the high-precision Stage 1 heuristics.
+  (See `tests/eval_stage2.py`.)
 - **Stage 1 heuristics extended** to cover injection styles the ML model misses
   (the layering payoff): `sensitive_file_read` (read ~/.ssh/id_rsa / .env / …),
   `goal_hijack` ("your new goal is to …"), and exfil verbs extract/steal/harvest/

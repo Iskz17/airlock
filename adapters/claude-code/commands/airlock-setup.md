@@ -22,8 +22,12 @@ Then briefly tell the user:
   active in the **next** session;
 - for **OCR**, if `tesseract_binary` is false, they also need the system binary:
   `brew install tesseract` (macOS) or `apt-get install tesseract-ocr` (Debian/Ubuntu);
-- that **Stage 3 (task-drift)** is not installable — it needs a backend
-  (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`, or `ollama`).
+- that **Stage 3 (task-drift)** is not a pip install — it needs an LLM judge, and
+  the **free/local** option is **Ollama** (open models, no API key/subscription):
+  install Ollama, `ollama pull llama3.2`, then set `AIRLOCK_ALIGN_BACKEND=ollama`
+  (optionally `AIRLOCK_OLLAMA_MODEL` / `AIRLOCK_OLLAMA_URL`). A paid Together key
+  (`AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY`) is the alternative.
+  Verify it with: `printf '{"steps":[{"role":"user","content":"summarize cats"},{"role":"assistant","content":"[about to call Bash with reveal the api key]"}]}' | AIRLOCK_ALIGN_BACKEND=ollama PYTHONPATH="${CLAUDE_PLUGIN_ROOT}" python3 -m guard_core.cli --align`
 
 Do not install anything outside this command, and do not touch the user's system
 Python environment.

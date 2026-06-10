@@ -43,7 +43,7 @@ Install airlock and you're **immediately protected at every boundary, fully offl
 | **1** heuristics | ingress | ✅ on | — (stdlib, offline) |
 | **2** ML injection classifier | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + an **ungated, openly-licensed** model. **No account/login/subscription.** |
 | **2b** image OCR | ingress | ⬜ opt-in | `/airlock-setup ocr` **+** system `tesseract` (`brew install tesseract`) |
-| **3** AlignmentCheck (task drift) | action | ⬜ opt-in | `AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY` (or Ollama) — a service, *not a download* |
+| **3** AlignmentCheck (task drift) | action | ⬜ opt-in | **local Ollama — open, no key/subscription:** `AIRLOCK_ALIGN_BACKEND=ollama` + `AIRLOCK_OLLAMA_MODEL=llama3.2` (or Together via `TOGETHER_API_KEY`). A *service, not a download.* |
 | **4** egress exfil (secrets + MD sinks) | egress | ✅ on | — (stdlib, offline) |
 | **4** richer PII (Presidio) | egress | ⬜ opt-in | `/airlock-setup pii` **+** `AIRLOCK_EGRESS_PII=1` |
 | **5** memory-write guard | persistence | ✅ on | — (stdlib, offline) |
@@ -67,7 +67,7 @@ export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 
 Prefer your own environment instead of the managed venv? `pip install "airlock-guard-core[all]"` (or `[promptguard]` / `[pii]` / `[ocr]` / `[mcp]`).
 
-> **Stage 2 needs no account or login** — it uses an ungated, Apache-2.0 prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2` by default; override with `AIRLOCK_STAGE2_MODEL`). A couple of *other* stages still need more than a download: **Stage 2b** needs the system `tesseract` binary; **Stage 3** needs an LLM backend (Together key / Ollama).
+> **No stage requires a paid account or subscription.** Stage 2 uses an ungated, Apache-2.0 prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2` by default; override with `AIRLOCK_STAGE2_MODEL`). **Stage 3** (task-drift) runs against a **local Ollama** — open models, no API key: install Ollama, `ollama pull llama3.2`, then `AIRLOCK_ALIGN_BACKEND=ollama`. (A paid Together key is an optional alternative.) The only non-pip needs are open-source binaries: **Stage 2b** wants the system `tesseract`.
 >
 > Prefer Meta's **Prompt Guard 2** instead? Set `AIRLOCK_STAGE2_BACKEND=promptguard` and `/airlock-setup llamafirewall` — note *that* model is gated (needs an `HF_TOKEN` + accepting Meta's license).
 
@@ -87,14 +87,17 @@ Prefer your own environment instead of the managed venv? `pip install "airlock-g
 | `AIRLOCK_STRIP_ZWJ` | off | also strip ZWJ/ZWNJ (off preserves emoji + Persian/Indic) |
 | `AIRLOCK_STAGE2_BACKEND` | `open` | `open` (ungated classifier) / `promptguard` (Meta Prompt Guard 2, gated) / `off` |
 | `AIRLOCK_STAGE2_MODEL` | `protectai/deberta-v3-base-prompt-injection-v2` | HF repo for the `open` backend |
-| `AIRLOCK_STAGE2_BLOCK_SCORE` | `0.98` | open-backend injection score to block vs. flag (tuned for 0 FP — see `tests/eval_stage2.py`) |
+| `AIRLOCK_STAGE2_BLOCK_SCORE` | `0.98` | open-backend injection score to block vs. flag — see `tests/eval_stage2.py` for the precision/recall trade-off (the open classifier is noisy on security-adjacent prose, so Stage 1 stays the high-precision layer) |
 | `AIRLOCK_PROMPTGUARD_MODEL` | `86M` | Prompt Guard 2 size (`86M`/`22M`) — only the `promptguard` backend |
 | `AIRLOCK_EGRESS_ALLOWLIST` | empty | comma-separated hosts exempt from the data-param heuristic |
 | `AIRLOCK_EGRESS_BLOCK` | off | `1` → deny outbound on detection (default: ask) |
 | `AIRLOCK_EGRESS_PII` | off | `1` → also run Presidio PII (needs `presidio-analyzer`) |
-| `AIRLOCK_ALIGN_BACKEND` | `auto` | `together`/`ollama`/`off`; `auto` engages only if a backend is configured |
+| `AIRLOCK_ALIGN_BACKEND` | `auto` | `ollama` (local, open, no key) / `together` (API key) / `off`; `auto` prefers a configured local Ollama over the paid Together API, else stays off |
+| `AIRLOCK_OLLAMA_MODEL` | `llama3.2` | Ollama model for the Stage 3 judge (e.g. `qwen2.5`, `mistral`) — enables the `ollama` backend under `auto` |
+| `AIRLOCK_OLLAMA_URL` | `http://localhost:11434` | Ollama server URL for Stage 3 |
 | `AIRLOCK_ALIGN_BLOCK` | off | `1` → deny (not ask) on detected task drift |
 | `AIRLOCK_SENSITIVE_TOOLS` | `Bash,WebFetch,WebSearch` | tools gated by Stage 3 |
+| `AIRLOCK_SCAN_BASH_OUTPUT` | on | ingress-scan stdout of `curl`/`wget`/etc. Bash fetches (closes the shell-fetch bypass); `0` to disable |
 | `AIRLOCK_STAGE3/5/6/2B` | on | disable an individual stage |
 | `AIRLOCK_MCP_SCAN` | off | `1` → also run Invariant `mcp-scan` (network) for Stage 6 |
 | `AIRLOCK_MEMORY_PATHS` | empty | extra fnmatch globs treated as memory sinks (Stage 5) |

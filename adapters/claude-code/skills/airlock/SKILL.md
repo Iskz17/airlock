@@ -39,7 +39,7 @@ On detection the hook injects a quarantine + re-anchor reminder (and, for high-c
 - `AIRLOCK_BLOCK_THRESHOLD` — severity (1–3) at/above which a fetch is blocked vs. only flagged (default 3).
 - `AIRLOCK_STRIP_ZWJ=1` — also strip ZWJ/ZWNJ (off by default to preserve emoji and Persian/Indic text).
 - `AIRLOCK_PROMPTGUARD_MODEL=86M|22M` — Prompt Guard model size.
-- `AIRLOCK_ALIGN_BACKEND=together|ollama|off` — Stage 3 judge backend (`auto` engages only if configured); `AIRLOCK_ALIGN_BLOCK=1` to deny vs. ask; `AIRLOCK_SENSITIVE_TOOLS` to change which tools are gated.
+- `AIRLOCK_ALIGN_BACKEND=ollama|together|off` — Stage 3 judge backend. **`ollama` is local, open, and needs no API key/subscription** (`AIRLOCK_OLLAMA_MODEL=llama3.2`, `AIRLOCK_OLLAMA_URL=http://localhost:11434`); `auto` prefers a configured Ollama over the paid Together API. `AIRLOCK_ALIGN_BLOCK=1` to deny vs. ask; `AIRLOCK_SENSITIVE_TOOLS` to change which tools are gated.
 - `AIRLOCK_MCP_SCAN=1` — also run `mcp-scan` for Stage 6 (network). `AIRLOCK_MEMORY_PATHS` — extra memory-sink globs; `AIRLOCK_MEMORY_BLOCK=1` to deny vs. ask.
 
 ## Manual checks

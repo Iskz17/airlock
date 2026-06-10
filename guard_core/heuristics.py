@@ -25,9 +25,22 @@ _PATTERNS = [
      r"\bif\s+you(?:'re|\s+are)\s+(?:an?\s+)?(ai|a\.i\.|assistant|agent|language\s+model|llm|chatbot|bot)\b"
      r"|\bto\s+the\s+(ai|assistant|agent|model|llm)\s+(reading|processing|that)\b"),
     ("exfiltration", 3,
-     r"\b(reveal|expose|print|show|send|email|e-mail|leak|disclose|output|forward|exfiltrate|dump)\b"
+     r"\b(reveal|expose|print|show|send|email|e-mail|leak|disclose|output|forward|exfiltrate|dump|"
+     r"extract|steal|harvest|siphon)\b"
      r"[^.\n]{0,40}\b(system\s+prompt|api[\s_-]?keys?|passwords?|secrets?|tokens?|credentials?|"
      r"account\s+(?:number|details|id)|ssn|social\s+security|private\s+keys?|env(?:ironment)?\s+variables?)\b"),
+    # Reading a sensitive credential file (Stage 2 ML classifiers miss this style;
+    # mirrors the MCP read_sensitive_file signature). High-precision: gated by the path.
+    ("sensitive_file_read", 3,
+     r"\b(read|open|cat|load|access|include|attach|send|print|leak|exfiltrate|contents?\s+of)\b"
+     r"[^.\n]{0,40}(~/?\.ssh|id_rsa|id_ed25519|\.env\b|\.aws/credentials|\.netrc|"
+     r"\.git-credentials|private[\s_-]?key)"),
+    # Goal/objective hijack ("your new goal is to …"). Specific forms only (not the
+    # broad 'you must now …') to avoid flagging benign imperatives.
+    ("goal_hijack", 2,
+     r"\byour\s+(new|real|true|actual|primary|secret)\s+"
+     r"(goal|objective|task|purpose|mission|directive|instructions?|job)\s+(is|are)\b"
+     r"|\bfrom\s+now\s+on\b[^.\n]{0,25}\byour\s+(goal|objective|task|job|purpose)\b"),
     ("task_substitution", 2,
      r"\binstead\s*,?\s+(do|please|you\s+should|ignore|respond|reply)\b"
      r"|\b(also|additionally|furthermore)\b[^.\n]{0,40}\b(append|add|include|write|output|say)\b"

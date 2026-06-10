@@ -17,6 +17,11 @@ All notable changes to airlock are documented here. Versions follow semver.
 - **Stage 2 block threshold tuned to 0.98** (from 0.8) on a hard-negative eval
   corpus (`tests/eval_stage2.py`): 0 false positives, recall unchanged (precision
   1.000 / recall 0.850 / F1 0.919). Eval harness added for reproducibility.
+- **Stage 1 heuristics extended** to cover injection styles the ML model misses
+  (the layering payoff): `sensitive_file_read` (read ~/.ssh/id_rsa / .env / …),
+  `goal_hijack` ("your new goal is to …"), and exfil verbs extract/steal/harvest/
+  siphon. High-precision (path/objective-gated) — no new false positives on the
+  benign hard-negative set.
 
 ### Added
 - **CI** (GitHub Actions): test suite on Python 3.9–3.13 × {ubuntu, macos},

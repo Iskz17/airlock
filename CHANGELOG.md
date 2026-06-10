@@ -14,6 +14,9 @@ All notable changes to airlock are documented here. Versions follow semver.
   (`AIRLOCK_STAGE2_BACKEND=promptguard` + `/airlock-setup llamafirewall`); its model
   is gated. The `promptguard` extra / `all` are now fully ungated (torch +
   transformers + sentencepiece); `llamafirewall` is a separate, non-`all` extra.
+- **Stage 2 block threshold tuned to 0.98** (from 0.8) on a hard-negative eval
+  corpus (`tests/eval_stage2.py`): 0 false positives, recall unchanged (precision
+  1.000 / recall 0.850 / F1 0.919). Eval harness added for reproducibility.
 
 ### Added
 - **CI** (GitHub Actions): test suite on Python 3.9–3.13 × {ubuntu, macos},

@@ -87,7 +87,7 @@ Prefer your own environment instead of the managed venv? `pip install "airlock-g
 | `AIRLOCK_STRIP_ZWJ` | off | also strip ZWJ/ZWNJ (off preserves emoji + Persian/Indic) |
 | `AIRLOCK_STAGE2_BACKEND` | `open` | `open` (ungated classifier) / `promptguard` (Meta Prompt Guard 2, gated) / `off` |
 | `AIRLOCK_STAGE2_MODEL` | `protectai/deberta-v3-base-prompt-injection-v2` | HF repo for the `open` backend |
-| `AIRLOCK_STAGE2_BLOCK_SCORE` | `0.8` | open-backend injection score to block vs. flag |
+| `AIRLOCK_STAGE2_BLOCK_SCORE` | `0.98` | open-backend injection score to block vs. flag (tuned for 0 FP — see `tests/eval_stage2.py`) |
 | `AIRLOCK_PROMPTGUARD_MODEL` | `86M` | Prompt Guard 2 size (`86M`/`22M`) — only the `promptguard` backend |
 | `AIRLOCK_EGRESS_ALLOWLIST` | empty | comma-separated hosts exempt from the data-param heuristic |
 | `AIRLOCK_EGRESS_BLOCK` | off | `1` → deny outbound on detection (default: ask) |

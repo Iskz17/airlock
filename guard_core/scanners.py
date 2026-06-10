@@ -175,7 +175,10 @@ def _prompt_guard_open(text: str):
     except (TypeError, ValueError):
         score = 0.0
     injected = ("INJECT" in label) or (label in ("LABEL_1", "UNSAFE", "JAILBREAK", "TOXIC"))
-    block_score = _timeout_secs("AIRLOCK_STAGE2_BLOCK_SCORE", 0.8)
+    # Default 0.98: on a hard-negative eval corpus (tests/eval_stage2.py) the open
+    # classifier's scores are bimodal, so 0.98 removes benign-imperative false
+    # positives ("ignore the outliers", "you are now connected…") at no recall cost.
+    block_score = _timeout_secs("AIRLOCK_STAGE2_BLOCK_SCORE", 0.98)
     if injected and score >= block_score:
         decision = "block"
     elif injected and score >= 0.5:

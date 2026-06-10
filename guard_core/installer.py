@@ -32,11 +32,13 @@ EXTRAS = {
     "promptguard": ["llamafirewall"],                       # Stage 2 / Stage 3
     "pii": ["presidio-analyzer", "presidio-anonymizer"],    # Stage 4 richer PII
     "ocr": ["pytesseract", "Pillow"],                       # Stage 2b (also needs the tesseract binary)
-    "mcp": ["mcp-scan"],                                    # Stage 6 enrichment
+    "mcp": ["snyk-agent-scan"],                             # Stage 6 enrichment (was: mcp-scan, renamed)
 }
 # extra-name -> import name used to probe whether it's already present
 _PROBE = {"promptguard": "llamafirewall", "pii": "presidio_analyzer",
           "ocr": "pytesseract", "mcp": "mcp_scan"}
+# extras whose presence is better detected by a CLI on PATH than an import
+_PROBE_BIN = {"mcp": ("snyk-agent-scan", "mcp-scan")}
 
 _pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -165,11 +167,15 @@ def status():
     out = {}
     for extra, mod in _PROBE.items():
         try:
-            out[extra] = importlib.util.find_spec(mod) is not None
+            present = importlib.util.find_spec(mod) is not None
         except Exception:
-            out[extra] = False
+            present = False
+        # Some extras ship a CLI rather than an importable module (mcp scanner).
+        if not present and extra in _PROBE_BIN:
+            present = any(shutil.which(b) for b in _PROBE_BIN[extra]) or any(
+                os.path.exists(os.path.join(venv_dir(), "bin", b)) for b in _PROBE_BIN[extra])
+        out[extra] = present
     # Stage 2b also needs the system tesseract binary; flag it honestly.
-    import shutil
     out["tesseract_binary"] = shutil.which("tesseract") is not None
     return out
 

@@ -222,21 +222,49 @@ def read_mcp_servers(config_paths=None):
 # --- mcp-scan integration (opt-in) -------------------------------------------
 
 def _mcp_scan_cmd(config_paths):
-    """Return the argv to invoke mcp-scan, or None if unavailable."""
-    base_args = ["scan", "--json"] + list(config_paths)
-    if shutil.which("mcp-scan"):
-        return ["mcp-scan"] + base_args
+    """Return the argv to invoke the MCP scanner, or None if unavailable.
+
+    Confirmed against the real tool: it was **renamed mcp-scan -> snyk-agent-scan**
+    (the old alias prints a deprecation warning to *stdout* that would corrupt
+    --json), so prefer the new name. The global `--json` must precede the `scan`
+    subcommand; config files are positional."""
+    tail = ["--json", "scan"] + list(config_paths)
+    names = ("snyk-agent-scan", "mcp-scan")
+    for nm in names:
+        if shutil.which(nm):
+            return [nm] + tail
     # airlock's managed venv (populated by `/airlock-setup mcp`).
     try:
         from .installer import venv_dir
-        for rel in ("bin/mcp-scan", "Scripts/mcp-scan.exe"):
-            cand = os.path.join(venv_dir(), rel)
-            if os.path.exists(cand):
-                return [cand] + base_args
+        for nm in names:
+            for rel in ("bin/%s" % nm, "Scripts/%s.exe" % nm):
+                cand = os.path.join(venv_dir(), rel)
+                if os.path.exists(cand):
+                    return [cand] + tail
     except Exception:
         pass
     if shutil.which("uvx"):
-        return ["uvx", "mcp-scan@latest"] + base_args
+        return ["uvx", "snyk-agent-scan@latest"] + tail
+    return None
+
+
+def _extract_json(text):
+    """Parse JSON from tool output that may be prefixed by a deprecation warning
+    or other noise on stdout (the renamed scanner does this). Returns the parsed
+    object or None — never raises."""
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except ValueError:
+        pass
+    for i, ch in enumerate(text):
+        if ch in "{[":
+            try:
+                obj, _end = json.JSONDecoder().raw_decode(text[i:])  # tolerate trailing junk
+                return obj
+            except ValueError:
+                continue
     return None
 
 
@@ -278,24 +306,22 @@ def run_mcp_scan(config_paths, timeout=90):
     """
     cmd = _mcp_scan_cmd(config_paths)
     if cmd is None:
-        return None, "mcp-scan not installed (pip install mcp-scan, or have uvx on PATH)"
+        return None, "MCP scanner not installed (pip install snyk-agent-scan, or have uvx on PATH)"
     try:
         proc = subprocess.run(
             cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=timeout, text=True)
     except subprocess.TimeoutExpired:
-        return None, "mcp-scan timed out after %ss" % timeout
+        return None, "mcp scanner timed out after %ss" % timeout
     except Exception as e:  # noqa: BLE001 — never let the scanner break us
-        return None, "mcp-scan failed to run: %s" % e
+        return None, "mcp scanner failed to run: %s" % e
 
-    out = (proc.stdout or "").strip()
+    # The scanner may emit a deprecation/banner line to stdout before the JSON;
+    # _extract_json tolerates that (and trailing junk).
+    data = _extract_json((proc.stdout or "").strip())
+    if data is None:
+        return [], "mcp scanner produced no parseable JSON (schema unconfirmed); relying on offline checks"
     findings = []
-    try:
-        data = json.loads(out)
-    except ValueError:
-        # Non-JSON (older version / no --json support). Surface stderr/stdout note.
-        note = "mcp-scan produced non-JSON output (schema unconfirmed); relying on offline checks"
-        return [], note
     _collect_mcp_scan_findings(data, findings)
     return findings, ""
 

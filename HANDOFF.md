@@ -60,13 +60,22 @@ publishing, not construction.
 ## Current verification status (be honest about this)
 
 **Proven:**
-- 144 offline checks pass (`python3 tests/run_all.py`); `claude plugin validate
+- 148 offline checks pass (`python3 tests/run_all.py`); `claude plugin validate
   adapters/claude-code` ✔; openclaw `tsc --noEmit` clean + TS↔Python round-trip
-  against the live sidecar.
+  against the live sidecar. **CI (GitHub Actions) runs the suite on Python
+  3.9–3.13 × {ubuntu, macos} + the openclaw round-trip + manifest version
+  agreement, green on `main`.**
 - **Live in-session smoke test (real `claude -p` session):** plugin loads via
   `--plugin-dir`, **SessionStart / PreToolUse(Bash) / Stop hooks fire and Claude
   Code parses+validates their output.** This retired the biggest unknown ("do
   hooks fire live / do the I/O shapes match?").
+- **Stage 2/3 LlamaFirewall API VERIFIED** against the installed `llamafirewall`
+  (introspection + live `LlamaFirewall(...)` construction): `ScannerType.PROMPT_GUARD`
+  / `.AGENT_ALIGNMENT`, `Role.USER`/`.ASSISTANT`, `UserMessage(content=str)`,
+  `scan(input)` / `scan_replay(trace: List[Message])`, and `ScanResult.decision`
+  (ScanDecision `ALLOW`/`BLOCK`/`HUMAN_IN_THE_LOOP_REQUIRED`) / `.score` / `.reason`
+  all match our code. Red-team #9 (silent-no-op via wrong API) is **resolved: our
+  field reads are correct.**
 
 **NOT yet proven (inferred, not observed):**
 - **PostToolUse on a real poisoned WebFetch** — the sandbox blocked `localhost`,
@@ -75,11 +84,17 @@ publishing, not construction.
 - **A live deny/ask decision** — the model self-defended before the tool ran, so
   the gate didn't get to fire on a malicious call. Need a forced/benign-looking
   trigger, or a reachable URL.
-- **Stages 2/3/6-enrichment against the REAL libraries** — `scanners.py` (Prompt
-  Guard 2, AlignmentCheck `scan_replay`) and `mcp_vetting.run_mcp_scan` are
-  written defensively but never run against installed `llamafirewall`/`mcp-scan`.
-  If the real API differs they fail open = silent no-op. Confirm field/scanner
-  names when you install them (red-team finding #9, intentionally not fixed).
+- **Stage 2 actual inference** — blocked locally by **llamafirewall's fragile
+  transitive deps** (a fresh install pulls an incompatible `huggingface_hub`/
+  `transformers`; Prompt Guard 2 raises and airlock fails open → Stage 2 silently
+  inactive). Our code is correct and fails open cleanly; the fix is dep pinning
+  per llamafirewall's requirements (noted in `pyproject.toml [promptguard]`). Stage 3
+  also needs a Together/Ollama backend we don't have here (API surface confirmed).
+- **Stage 6 mcp-scan**: confirmed the tool was **renamed `mcp-scan` →
+  `snyk-agent-scan`** and prints a deprecation banner to *stdout*; `_mcp_scan_cmd`
+  now prefers the new name with `--json` before `scan`, and `_extract_json` strips
+  the banner. The exact findings-JSON shape still needs a live (benign) MCP server;
+  our parser is schema-tolerant + fails over to offline vetting.
 - **openclaw end-to-end poisoned *agent turn*** — the binding was rewritten
   (uncommitted), red-teamed (11/11 fixed), and **validated live on a real
   `openclaw@2026.6.1` gateway**: `.ts` entry loads directly (no compiled dist),

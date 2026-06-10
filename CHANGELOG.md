@@ -2,6 +2,25 @@
 
 All notable changes to airlock are documented here. Versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **CI** (GitHub Actions): test suite on Python 3.9–3.13 × {ubuntu, macos},
+  openclaw `tsc` + sidecar round-trip, and manifest/version-agreement checks.
+  README CI/license/python badges.
+
+### Changed / Fixed (verified against the real libraries)
+- **Stage 2/3 LlamaFirewall API confirmed correct** by introspecting the installed
+  `llamafirewall` (ScannerType/Role/message/scan/scan_replay/ScanResult fields all
+  match) — resolves the red-team "silent no-op" concern for the API itself. Noted
+  llamafirewall's fragile transitive deps (`huggingface_hub`/`transformers`) that
+  can make Stage 2 inference fail open; flagged in `pyproject [promptguard]`.
+- **Stage 6 mcp-scan**: the tool was **renamed `mcp-scan` → `snyk-agent-scan`** and
+  prints a deprecation banner to stdout. `_mcp_scan_cmd` now prefers the new name
+  with `--json` before the `scan` subcommand; new `_extract_json` strips the banner
+  before parsing; `[mcp]` extra → `snyk-agent-scan`; installer status is binary-aware.
+  148 offline checks.
+
 ## [0.2.3] — 2026-06-09
 
 ### Changed

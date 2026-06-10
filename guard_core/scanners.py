@@ -11,10 +11,13 @@ Stage 2 (Prompt Guard 2) is local once the model is fetched. Stage 3
 local Ollama — and is therefore off the default offline path; it activates only
 when a backend is configured (see `align_available`).
 
-NOTE: LlamaFirewall's exact ScanResult fields / ScanDecision enum names and the
-AlignmentCheck ScannerType name should be re-confirmed against the installed
-package; the mappings below are defensive (getattr + several candidate names) so
-they tolerate minor API differences.
+VERIFIED against the real `llamafirewall` package (introspection + live
+construction): ScannerType.PROMPT_GUARD and .AGENT_ALIGNMENT exist; Role.USER /
+.ASSISTANT exist; UserMessage/AssistantMessage take `content: str`;
+LlamaFirewall.scan(input) and .scan_replay(trace: List[Message]) match; ScanResult
+exposes `.decision` (ScanDecision ALLOW/BLOCK/HUMAN_IN_THE_LOOP_REQUIRED), `.score`
+(float) and `.reason` (str). The mappings stay defensive (getattr + candidate
+names) to tolerate version drift, but the current names are confirmed correct.
 """
 from __future__ import annotations
 

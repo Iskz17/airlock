@@ -12,9 +12,14 @@ All notable changes to airlock are documented here. Versions follow semver.
 ### Changed / Fixed (verified against the real libraries)
 - **Stage 2/3 LlamaFirewall API confirmed correct** by introspecting the installed
   `llamafirewall` (ScannerType/Role/message/scan/scan_replay/ScanResult fields all
-  match) — resolves the red-team "silent no-op" concern for the API itself. Noted
-  llamafirewall's fragile transitive deps (`huggingface_hub`/`transformers`) that
-  can make Stage 2 inference fail open; flagged in `pyproject [promptguard]`.
+  match) — resolves the red-team "silent no-op" concern for the API itself.
+- **Stage 2 dependency break fixed.** llamafirewall imports `HfFolder` (removed in
+  `huggingface_hub>=1.0`) but pins hf_hub unbounded, so a bare install broke Prompt
+  Guard 2. The `[promptguard]` extra + installer now pin `huggingface_hub==0.30.2`
+  and `transformers==4.51.3` (verified working). Documented that Stage 2 also needs
+  an HF token + acceptance of the gated meta-llama Prompt Guard 2 license; airlock's
+  timeout/fail-open prevents llamafirewall's interactive login prompt from hanging a
+  hook.
 - **Stage 6 mcp-scan**: the tool was **renamed `mcp-scan` → `snyk-agent-scan`** and
   prints a deprecation banner to stdout. `_mcp_scan_cmd` now prefers the new name
   with `--json` before the `scan` subcommand; new `_extract_json` strips the banner

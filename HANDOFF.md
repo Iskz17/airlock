@@ -84,12 +84,17 @@ publishing, not construction.
 - **A live deny/ask decision** — the model self-defended before the tool ran, so
   the gate didn't get to fire on a malicious call. Need a forced/benign-looking
   trigger, or a reachable URL.
-- **Stage 2 actual inference** — blocked locally by **llamafirewall's fragile
-  transitive deps** (a fresh install pulls an incompatible `huggingface_hub`/
-  `transformers`; Prompt Guard 2 raises and airlock fails open → Stage 2 silently
-  inactive). Our code is correct and fails open cleanly; the fix is dep pinning
-  per llamafirewall's requirements (noted in `pyproject.toml [promptguard]`). Stage 3
-  also needs a Together/Ollama backend we don't have here (API surface confirmed).
+- **Stage 2 actual inference** — root-caused and the dep blocker is FIXED, but the
+  model is **gated**. llamafirewall's `promptguard_utils` does `from huggingface_hub
+  import HfFolder` while pinning hf_hub unbounded; newer hf_hub (>=1.0) removed
+  HfFolder → broken. Fixed by pinning `huggingface_hub==0.30.2` + `transformers==
+  4.51.3` (its verified floor) in `[promptguard]` / installer EXTRAS — the import
+  chain then reaches model download. The remaining wall is **HF gating**:
+  `meta-llama/Llama-Prompt-Guard-2-86M` needs an HF token + license acceptance, and
+  llamafirewall pops an **interactive `login()` prompt** when none is set (our
+  wall-clock timeout + fail-open contains it — no hook hang). To confirm actual
+  block/allow classification, run with a valid `HF_TOKEN`. Stage 3 also needs a
+  Together/Ollama backend (API surface confirmed).
 - **Stage 6 mcp-scan**: confirmed the tool was **renamed `mcp-scan` →
   `snyk-agent-scan`** and prints a deprecation banner to *stdout*; `_mcp_scan_cmd`
   now prefers the new name with `--json` before `scan`, and `_extract_json` strips

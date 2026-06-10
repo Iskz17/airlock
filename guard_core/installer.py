@@ -29,7 +29,12 @@ import time
 
 # extra-name -> pip package list (mirrors pyproject [project.optional-dependencies])
 EXTRAS = {
-    "promptguard": ["llamafirewall"],                       # Stage 2 / Stage 3
+    # llamafirewall's promptguard_utils does `from huggingface_hub import HfFolder`
+    # but pins huggingface-hub with no upper bound — newer hf_hub (>=1.0) removed
+    # HfFolder, so a bare install breaks. Pin to its verified floor (transformers
+    # 4.51.3 + hf_hub 0.30.2, which still has HfFolder). Stage 2 ALSO needs an HF
+    # token + acceptance of the gated meta-llama Prompt Guard 2 license at runtime.
+    "promptguard": ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"],
     "pii": ["presidio-analyzer", "presidio-anonymizer"],    # Stage 4 richer PII
     "ocr": ["pytesseract", "Pillow"],                       # Stage 2b (also needs the tesseract binary)
     "mcp": ["snyk-agent-scan"],                             # Stage 6 enrichment (was: mcp-scan, renamed)

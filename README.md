@@ -41,7 +41,7 @@ Install airlock and you're **immediately protected at every boundary, fully offl
 |---|---|---|---|
 | **0** invisible-Unicode | ingress | ✅ on | — (stdlib, offline) |
 | **1** heuristics | ingress | ✅ on | — (stdlib, offline) |
-| **2** Prompt Guard 2 | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + model |
+| **2** Prompt Guard 2 | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + model; **also needs `HF_TOKEN` + accepting the gated meta-llama Prompt Guard 2 license** |
 | **2b** image OCR | ingress | ⬜ opt-in | `/airlock-setup ocr` **+** system `tesseract` (`brew install tesseract`) |
 | **3** AlignmentCheck (task drift) | action | ⬜ opt-in | `AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY` (or Ollama) — a service, *not a download* |
 | **4** egress exfil (secrets + MD sinks) | egress | ✅ on | — (stdlib, offline) |
@@ -67,7 +67,7 @@ export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 
 Prefer your own environment instead of the managed venv? `pip install "airlock-guard-core[all]"` (or `[promptguard]` / `[pii]` / `[ocr]` / `[mcp]`).
 
-> Two stages can't be turned on by a download alone: **Stage 2b** also needs the system `tesseract` binary, and **Stage 3** needs an LLM backend (a key/service). Everything else is one command or already on.
+> Some stages need more than a download: **Stage 2** needs a Hugging Face token (`HF_TOKEN`/`huggingface-cli login`) and acceptance of the gated *meta-llama Prompt Guard 2* license — without it the model can't download and Stage 2 fails open (airlock's timeout prevents the library's interactive login prompt from hanging a hook). **Stage 2b** also needs the system `tesseract` binary; **Stage 3** needs an LLM backend (Together key / Ollama). The `[promptguard]` extra pins `huggingface_hub==0.30.2` + `transformers==4.51.3` because llamafirewall's unbounded pin otherwise pulls an hf_hub that removed a symbol it imports.
 
 ## Use
 

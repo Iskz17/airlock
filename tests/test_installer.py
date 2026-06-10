@@ -23,10 +23,11 @@ def check(name, cond):
 
 
 # 1) expand(): names -> packages, 'all' fans out, dedupe, unknown ignored.
-check("expand promptguard", installer.expand(["promptguard"]) == ["llamafirewall"])
+check("expand promptguard", installer.expand(["promptguard"]) == installer.EXTRAS["promptguard"]
+      and "llamafirewall" in installer.expand(["promptguard"]))
 check("expand all covers every extra",
       set(installer.expand(["all"])) == {p for v in installer.EXTRAS.values() for p in v})
-check("expand dedupes", installer.expand(["promptguard", "promptguard"]) == ["llamafirewall"])
+check("expand dedupes", installer.expand(["promptguard", "promptguard"]) == installer.EXTRAS["promptguard"])
 check("expand pipe/comma + unknown",
       installer.expand(["ocr", "bogus"]) == ["pytesseract", "Pillow"])
 

@@ -29,16 +29,16 @@ Issues = "https://github.com/Iskz17/airlock/issues"
 # Stages 0, 1 and 4 run on the standard library alone. The heavier detectors are
 # opt-in so the base install stays tiny and fully offline.
 [project.optional-dependencies]
-# NOTE: llamafirewall's transitive deps (transformers/huggingface_hub) are
-# fragile — a bare install can land an incompatible huggingface_hub where Prompt
-# Guard 2 inference raises and airlock fails open (Stage 2 silently inactive).
-# The API itself is verified compatible; if Stage 2 reports errors, pin a
-# matching huggingface_hub/transformers per llamafirewall's requirements.
-promptguard = ["llamafirewall"]                     # Stage 2: Prompt Guard 2 / Stage 3: AlignmentCheck
+# llamafirewall pins huggingface-hub with no upper bound, but its code imports
+# HfFolder (removed in hf_hub 1.0) — so a bare install breaks. Pin to the verified
+# working floor. Stage 2 ALSO needs an HF token + acceptance of the gated
+# meta-llama Prompt Guard 2 license at runtime (else it fails open).
+promptguard = ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"]
 pii = ["presidio-analyzer", "presidio-anonymizer"]  # Stage 4: richer PII egress
 ocr = ["pytesseract", "Pillow"]                     # Stage 2b: multimodal image OCR
 mcp = ["snyk-agent-scan"]                           # Stage 6: MCP supply-chain enrichment (was mcp-scan)
-all = ["llamafirewall", "presidio-analyzer", "presidio-anonymizer", "pytesseract", "Pillow", "snyk-agent-scan"]
+all = ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3",
+       "presidio-analyzer", "presidio-anonymizer", "pytesseract", "Pillow", "snyk-agent-scan"]
 
 [project.scripts]
 airlock-scan = "guard_core.cli:main"

@@ -1,5 +1,9 @@
 # airlock
 
+[![CI](https://github.com/Iskz17/airlock/actions/workflows/ci.yml/badge.svg)](https://github.com/Iskz17/airlock/actions/workflows/ci.yml)
+&nbsp;![license: MIT](https://img.shields.io/badge/license-MIT-blue)
+&nbsp;![python: 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
+
 A layered prompt-injection / agent-security guard with a **shared core** and **thin per-harness adapters** (Claude Code + openclaw), organized around the agent's **trust boundaries** — ingress, action, egress, persistence, and supply chain — with a graceful **offline ladder**. The lesson behind the design (cf. EchoLeak / CVE-2025-32711): a single input classifier gets bypassed, so the defense is layered across boundaries.
 
 ## What it catches

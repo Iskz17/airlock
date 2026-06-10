@@ -33,8 +33,11 @@ _PATTERNS = [
     # mirrors the MCP read_sensitive_file signature). High-precision: gated by the path.
     ("sensitive_file_read", 3,
      r"\b(read|open|cat|load|access|include|attach|send|print|leak|exfiltrate|contents?\s+of)\b"
-     r"[^.\n]{0,40}(~/?\.ssh|id_rsa|id_ed25519|\.env\b|\.aws/credentials|\.netrc|"
-     r"\.git-credentials|private[\s_-]?key)"),
+     # `.env` but NOT the safe-to-share placeholder files (.env.example/.sample/...)
+     # — referencing those in dev docs is benign and was over-blocking.
+     r"[^.\n]{0,40}(~/?\.ssh|id_rsa|id_ed25519|"
+     r"\.env(?!\.(?:example|sample|template|dist|defaults?))\b|"
+     r"\.aws/credentials|\.netrc|\.git-credentials|private[\s_-]?key)"),
     # Goal/objective hijack ("your new goal is to …"). Specific forms only (not the
     # broad 'you must now …') to avoid flagging benign imperatives.
     ("goal_hijack", 2,

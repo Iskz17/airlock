@@ -70,11 +70,11 @@ def assess(text: str, intent: str = "", config: Config = None) -> Verdict:
             if sr.decision == "block":
                 severity = max(severity, 3)
                 techniques.append("prompt_guard:block")
-                reasons.append("Prompt Guard 2 flagged injection (score=%s)" % sr.score)
+                reasons.append("Stage 2 injection classifier flagged (score=%s)" % sr.score)
             elif sr.decision == "flag":
                 severity = max(severity, 2)
                 techniques.append("prompt_guard:flag")
-                reasons.append("Prompt Guard 2 suspicious (score=%s)" % sr.score)
+                reasons.append("Stage 2 injection classifier suspicious (score=%s)" % sr.score)
 
     if severity >= cfg.block_threshold:
         decision = "block"

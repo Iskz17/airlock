@@ -19,7 +19,8 @@ work is breadth of verification + optional publishing, not construction.
 > gaps). (2) **Bash-fetch ingress bypass CLOSED** — new `bash_ingress.py` +
 > `scan_bash_output.py` scan curl/wget output. (3) **Stage 3 now has a real,
 > open, no-subscription backend** — a stdlib Ollama judge (no key, no
-> llamafirewall, works on Py3.9; the old `ollama` flag was never wired). (4)
+> llamafirewall, works on Py3.9; the old `ollama` flag was never wired) — **proven
+> live: `qwen2.5:7b` 7/7, `llama3.2`-3B too weak so default is now 7B**. (4)
 > **Stage 2 FP re-measured on a 93-item corpus: ~25% FP / precision ≈0.74** (the
 > old "0 FP" was corpus-overfit) — user chose to KEEP Stage 2 block authority.
 > (5) Red-team fixes: `.env.example` FP, Stage 2 label. All local commits, unpushed.
@@ -111,13 +112,15 @@ sidecar; `installer.py` managed-venv setup.
   untrusted data, ignored the injection, summarized only the legit content.
 - ✅ **Stage 2 real FP rate measured** — 93-item corpus: ~25% FP / precision ≈0.74
   (the open classifier is noisy on security-adjacent prose; scores non-bimodal).
-- ✅ **Stage 3 open path works** — Ollama judge tested via a mocked endpoint +
-  fail-open-when-down verified (connection-refused ~0.1s).
+- ✅ **Stage 3 open path PROVEN live against a real Ollama** — `qwen2.5:7b` scored
+  **7/7** on a drift/benign battery (blocked read-`~/.ssh/id_rsa` + env-exfil POST;
+  allowed all benign incl. the user's own requested fetch); `llama3.2`-3B got 4/7
+  (false-positives), so the **default judge is now `qwen2.5:7b`** (use 7B+).
+  Fail-open-when-down verified (connection-refused ~0.1s). macOS gotcha: install
+  Ollama via the **cask** (`brew install --cask ollama-app`), NOT the formula —
+  the formula doesn't bundle the `llama-server` runner (every /api/chat → HTTP 500).
 
 **Still NOT proven (inferred, not observed):**
-- **Stage 3 against a REAL Ollama** — Ollama isn't installed here; tested via mock
-  only. Next agent: `brew install ollama && ollama pull llama3.2`, then
-  `… | AIRLOCK_ALIGN_BACKEND=ollama python3 -m guard_core.cli --align`.
 - **Stage 6 snyk-agent-scan findings JSON shape** — needs a live (benign) MCP server.
 - **openclaw round-trip with the managed venv on path** — 3 `sanitizeToolResult`
   checks time out (4s client cap vs cold ML-model load); **hermetic/CI = green**.
@@ -166,10 +169,12 @@ stdout), `AIRLOCK_ALIGN_BACKEND` (`auto`* → prefers local ollama over together
 
 DONE this session: ~~live PostToolUse test~~ ✅; ~~bigger Stage 2 FP measurement~~ ✅
 (93-item corpus, ~25% FP — see eval); ~~Bash-fetch ingress bypass~~ ✅; ~~open
-no-subscription Stage 3 (Ollama)~~ ✅; red-team fixes ✅.
+no-subscription Stage 3 (Ollama)~~ ✅; ~~Stage 3 PROVEN live vs real Ollama~~ ✅
+(qwen2.5:7b 7/7; default bumped off 3B); red-team fixes ✅.
 
 Remaining:
-1. **Stage 3 against a real Ollama** (install + `--align`; mock-tested only here).
+1. **Optional: broaden the Stage 3 model eval** (llama3.1:8b, qwen2.5:14b) and turn
+   the ad-hoc 7-case battery into a saved `tests/eval_align.py` like eval_stage2.py.
 2. **Publish PyPI + npm** (needs registry tokens from the user) and **submit the
    official-directory form** (manual web submission).
 3. **Optional: pre-warm Stage 2 at sidecar/hook startup** so the first ingress

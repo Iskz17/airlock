@@ -9,13 +9,18 @@ All notable changes to airlock are documented here. Versions follow semver.
   Ollama server over HTTP (**stdlib `urllib` only**): no API key, no subscription,
   and **no `llamafirewall`**, so it works even on Python 3.9 (where llamafirewall
   can't import — `from typing import TypeAlias` is 3.10+). Set
-  `AIRLOCK_ALIGN_BACKEND=ollama` (+ `AIRLOCK_OLLAMA_MODEL`, default `llama3.2`,
+  `AIRLOCK_ALIGN_BACKEND=ollama` (+ `AIRLOCK_OLLAMA_MODEL`, default **`qwen2.5:7b`**,
   `AIRLOCK_OLLAMA_URL`). `auto` now **prefers a configured local Ollama over the
   paid Together API**. Previously `ollama` was documented but never actually wired
   (it silently fell back to Together). Fails open fast if the server is down
   (connection-refused is instant). New `python -m guard_core.cli --align` verifier.
 - The untrusted trace is delimited and the judge is instructed to treat it as
   data, not instructions (the judge-injection failure mode).
+- **Verified live against a real Ollama.** On a drift/benign battery `qwen2.5:7b`
+  scored 7/7 (blocked read-secret-file + env-exfil; allowed all benign), while
+  `llama3.2` (3B) got 4/7 — false-positiving on benign reads and even the user's
+  own requested fetch. Hence the **7B-class default**. macOS: install Ollama via
+  the **cask** (`ollama-app`), not the formula (no bundled `llama-server` runner).
 
 ### Ingress — closed the curl/wget Bash-fetch bypass
 - **New PostToolUse-on-Bash scan** (`scan_bash_output.py` + `guard_core.bash_ingress`):

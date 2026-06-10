@@ -43,7 +43,7 @@ Install airlock and you're **immediately protected at every boundary, fully offl
 | **1** heuristics | ingress | ✅ on | — (stdlib, offline) |
 | **2** ML injection classifier | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + an **ungated, openly-licensed** model. **No account/login/subscription.** |
 | **2b** image OCR | ingress | ⬜ opt-in | `/airlock-setup ocr` **+** system `tesseract` (`brew install tesseract`) |
-| **3** AlignmentCheck (task drift) | action | ⬜ opt-in | **local Ollama — open, no key/subscription:** `AIRLOCK_ALIGN_BACKEND=ollama` + `AIRLOCK_OLLAMA_MODEL=llama3.2` (or Together via `TOGETHER_API_KEY`). A *service, not a download.* |
+| **3** AlignmentCheck (task drift) | action | ⬜ opt-in | **local Ollama — open, no key/subscription:** `AIRLOCK_ALIGN_BACKEND=ollama` + `ollama pull qwen2.5:7b` (or Together via `TOGETHER_API_KEY`). Use a **7B+ judge** — 3B models false-positive (see below). |
 | **4** egress exfil (secrets + MD sinks) | egress | ✅ on | — (stdlib, offline) |
 | **4** richer PII (Presidio) | egress | ⬜ opt-in | `/airlock-setup pii` **+** `AIRLOCK_EGRESS_PII=1` |
 | **5** memory-write guard | persistence | ✅ on | — (stdlib, offline) |
@@ -67,7 +67,7 @@ export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 
 Prefer your own environment instead of the managed venv? `pip install "airlock-guard-core[all]"` (or `[promptguard]` / `[pii]` / `[ocr]` / `[mcp]`).
 
-> **No stage requires a paid account or subscription.** Stage 2 uses an ungated, Apache-2.0 prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2` by default; override with `AIRLOCK_STAGE2_MODEL`). **Stage 3** (task-drift) runs against a **local Ollama** — open models, no API key: install Ollama, `ollama pull llama3.2`, then `AIRLOCK_ALIGN_BACKEND=ollama`. (A paid Together key is an optional alternative.) The only non-pip needs are open-source binaries: **Stage 2b** wants the system `tesseract`.
+> **No stage requires a paid account or subscription.** Stage 2 uses an ungated, Apache-2.0 prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2` by default; override with `AIRLOCK_STAGE2_MODEL`). **Stage 3** (task-drift) runs against a **local Ollama** — open models, no API key: install Ollama, `ollama pull qwen2.5:7b`, then `AIRLOCK_ALIGN_BACKEND=ollama`. (A paid Together key is an optional alternative.) Use a **7B-class judge**: in live testing `qwen2.5:7b` scored 7/7 on a drift/benign battery while `llama3.2` (3B) false-positived on 3 benign actions (including the user's own requested fetch) — too weak to judge alignment, though it needs ~5GB RAM vs ~2GB. The only non-pip needs are open-source binaries: **Stage 2b** wants the system `tesseract`.
 >
 > Prefer Meta's **Prompt Guard 2** instead? Set `AIRLOCK_STAGE2_BACKEND=promptguard` and `/airlock-setup llamafirewall` — note *that* model is gated (needs an `HF_TOKEN` + accepting Meta's license).
 
@@ -93,7 +93,7 @@ Prefer your own environment instead of the managed venv? `pip install "airlock-g
 | `AIRLOCK_EGRESS_BLOCK` | off | `1` → deny outbound on detection (default: ask) |
 | `AIRLOCK_EGRESS_PII` | off | `1` → also run Presidio PII (needs `presidio-analyzer`) |
 | `AIRLOCK_ALIGN_BACKEND` | `auto` | `ollama` (local, open, no key) / `together` (API key) / `off`; `auto` prefers a configured local Ollama over the paid Together API, else stays off |
-| `AIRLOCK_OLLAMA_MODEL` | `llama3.2` | Ollama model for the Stage 3 judge (e.g. `qwen2.5`, `mistral`) — enables the `ollama` backend under `auto` |
+| `AIRLOCK_OLLAMA_MODEL` | `qwen2.5:7b` | Ollama model for the Stage 3 judge — **use 7B+** (3B models false-positive); enables the `ollama` backend under `auto` |
 | `AIRLOCK_OLLAMA_URL` | `http://localhost:11434` | Ollama server URL for Stage 3 |
 | `AIRLOCK_ALIGN_BLOCK` | off | `1` → deny (not ask) on detected task drift |
 | `AIRLOCK_SENSITIVE_TOOLS` | `Bash,WebFetch,WebSearch` | tools gated by Stage 3 |

@@ -29,6 +29,7 @@ class Config:
     strip_zwj: bool
     nfkc: bool
     confusables: bool
+    scan_bash_output: bool  # ingress-scan stdout of curl/wget/etc. Bash fetches
     block_threshold: int   # combined severity at/above which we hard-block
 
     @classmethod
@@ -45,6 +46,7 @@ class Config:
             strip_zwj=_flag("AIRLOCK_STRIP_ZWJ", False),
             nfkc=_flag("AIRLOCK_NFKC", True),
             confusables=_flag("AIRLOCK_CONFUSABLES", False),
+            scan_bash_output=_flag("AIRLOCK_SCAN_BASH_OUTPUT", True),
             block_threshold=threshold,
         )
 

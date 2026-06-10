@@ -27,6 +27,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/airlock-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scan_bash_output.py\"",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PreToolUse": [

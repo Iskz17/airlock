@@ -8,7 +8,7 @@ import tempfile
 _HERE = pathlib.Path(__file__).resolve().parent
 _SUITES = ["test_core.py", "test_egress.py", "test_more.py", "test_mcp.py",
            "test_alignment.py", "test_server.py", "test_persistence.py", "test_installer.py",
-           "test_redteam_fixes.py", "test_stage2.py"]
+           "test_redteam_fixes.py", "test_stage2.py", "test_bash_ingress.py"]
 
 
 def main():

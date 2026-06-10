@@ -67,6 +67,26 @@ def extract_text(tool_response) -> str:
     return str(tool_response)
 
 
+def extract_bash_output(tool_response) -> str:
+    """Pull model-visible text out of a Bash tool_response — the real Claude Code
+    shape is {"stdout","stderr","interrupted","isImage",...}. Returns stdout then
+    stderr (an injection can ride either); falls back to extract_text for a str or
+    an unexpected shape. Best-effort, never raises."""
+    if tool_response is None:
+        return ""
+    if isinstance(tool_response, str):
+        return tool_response
+    if isinstance(tool_response, dict):
+        parts = []
+        for k in ("stdout", "stderr"):
+            v = tool_response.get(k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v)
+        if parts:
+            return "\n".join(parts)
+    return extract_text(tool_response)
+
+
 def latest_user_intent(transcript_path: str, max_chars: int = 600) -> str:
     """Best-effort: the most recent genuine user prose from the transcript, used
     to re-anchor the agent after an injection is detected. Skips tool-result and

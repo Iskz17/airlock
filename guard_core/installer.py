@@ -28,20 +28,24 @@ import sys
 import time
 
 # extra-name -> pip package list (mirrors pyproject [project.optional-dependencies])
+# `all` fans these out — all UNGATED, no account/login/subscription needed.
 EXTRAS = {
-    # llamafirewall's promptguard_utils does `from huggingface_hub import HfFolder`
-    # but pins huggingface-hub with no upper bound — newer hf_hub (>=1.0) removed
-    # HfFolder, so a bare install breaks. Pin to its verified floor (transformers
-    # 4.51.3 + hf_hub 0.30.2, which still has HfFolder). Stage 2 ALSO needs an HF
-    # token + acceptance of the gated meta-llama Prompt Guard 2 license at runtime.
-    "promptguard": ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"],
-    "pii": ["presidio-analyzer", "presidio-anonymizer"],    # Stage 4 richer PII
-    "ocr": ["pytesseract", "Pillow"],                       # Stage 2b (also needs the tesseract binary)
-    "mcp": ["snyk-agent-scan"],                             # Stage 6 enrichment (was: mcp-scan, renamed)
+    "promptguard": ["torch", "transformers", "sentencepiece"],  # Stage 2: ungated open classifier
+    "pii": ["presidio-analyzer", "presidio-anonymizer"],        # Stage 4 richer PII
+    "ocr": ["pytesseract", "Pillow"],                          # Stage 2b (also needs the tesseract binary)
+    "mcp": ["snyk-agent-scan"],                                # Stage 6 enrichment (was: mcp-scan, renamed)
+}
+# Gated / backend-requiring extras — NOT part of `all`; install explicitly via
+# `/airlock-setup llamafirewall`. Used for the opt-in Meta Prompt Guard 2 backend
+# (AIRLOCK_STAGE2_BACKEND=promptguard, gated HF model) and Stage 3 AlignmentCheck.
+# llamafirewall imports HfFolder (removed in hf_hub>=1.0) but pins it unbounded, so
+# pin to its verified floor.
+_GATED_EXTRAS = {
+    "llamafirewall": ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"],
 }
 # extra-name -> import name used to probe whether it's already present
-_PROBE = {"promptguard": "llamafirewall", "pii": "presidio_analyzer",
-          "ocr": "pytesseract", "mcp": "mcp_scan"}
+_PROBE = {"promptguard": "transformers", "pii": "presidio_analyzer",
+          "ocr": "pytesseract", "mcp": "mcp_scan", "llamafirewall": "llamafirewall"}
 # extras whose presence is better detected by a CLI on PATH than an import
 _PROBE_BIN = {"mcp": ("snyk-agent-scan", "mcp-scan")}
 
@@ -86,7 +90,8 @@ def add_managed_to_path():
 
 
 def expand(extras):
-    """Resolve a list of extra names (incl. 'all') to a deduped pip package list."""
+    """Resolve a list of extra names (incl. 'all') to a deduped pip package list.
+    'all' covers only the ungated EXTRAS; gated extras must be named explicitly."""
     pkgs = []
     for e in extras:
         e = (e or "").strip().lower()
@@ -95,8 +100,10 @@ def expand(extras):
         if e == "all":
             for v in EXTRAS.values():
                 pkgs.extend(v)
-        else:
-            pkgs.extend(EXTRAS.get(e, []))
+        elif e in EXTRAS:
+            pkgs.extend(EXTRAS[e])
+        elif e in _GATED_EXTRAS:
+            pkgs.extend(_GATED_EXTRAS[e])
     seen, out = set(), []
     for p in pkgs:
         if p not in seen:

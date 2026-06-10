@@ -31,7 +31,7 @@ def main():
     except Exception:
         align_on = False
 
-    ingress = "Stages 0–2 (invisible-Unicode + heuristics + Prompt Guard 2)" \
+    ingress = "Stages 0–2 (invisible-Unicode + heuristics + ML classifier)" \
         if avail.get("prompt_guard") else \
         "Stage 0 invisible-Unicode + Stage 1 heuristics (offline)"
     action = "Stage 3 task-drift on" if align_on else "Stage 3 task-drift off (no align backend)"

@@ -29,6 +29,12 @@ _firewall = None
 _init_error = None
 _initialized = False
 
+# Stage 2 default backend = an UNGATED open classifier (no HF login/license).
+_open_clf = None
+_open_init_error = None
+_open_initialized = False
+_OPEN_MODEL_DEFAULT = "protectai/deberta-v3-base-prompt-injection-v2"  # Apache-2.0, not gated
+
 _TIMEOUT = object()  # sentinel: work exceeded its wall-clock budget
 
 
@@ -103,9 +109,86 @@ def _map_decision(d) -> str:
 
 
 def prompt_guard(text: str):
-    """Run Prompt Guard 2 on `text`. Returns ScanResult, or None if unavailable.
-    Bounded by a wall-clock budget so a first-call model load/download can't hang
-    the PostToolUse hook (it fails open to allow on timeout)."""
+    """Stage 2 — classify `text` for prompt injection. Returns ScanResult or None.
+
+    Default backend is an UNGATED open classifier (no Hugging Face login or license
+    needed). Set AIRLOCK_STAGE2_BACKEND=promptguard to use Meta Prompt Guard 2 via
+    llamafirewall (gated model), or 'off' to disable. Bounded by a wall-clock budget
+    so a first-call model download can't hang the PostToolUse hook (fails open)."""
+    backend = os.environ.get("AIRLOCK_STAGE2_BACKEND", "open").strip().lower()
+    if backend in ("off", "none", "0"):
+        return None
+    if backend in ("promptguard", "llamafirewall", "meta"):
+        return _prompt_guard_llamafirewall(text)
+    return _prompt_guard_open(text)
+
+
+def _ensure_open_classifier():
+    """Lazily build the ungated text-classification pipeline (downloads the model
+    on first call). Returns it or None; records why in _open_init_error."""
+    global _open_clf, _open_init_error, _open_initialized
+    if _open_initialized:
+        return _open_clf
+    _open_initialized = True
+    try:
+        from .installer import add_managed_to_path
+        add_managed_to_path()
+    except Exception:
+        pass
+    try:
+        from transformers import pipeline  # type: ignore
+    except Exception as e:
+        _open_init_error = "transformers unavailable: %s" % e
+        return None
+    model = os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT)
+    try:
+        _open_clf = pipeline("text-classification", model=model)
+    except Exception as e:
+        _open_init_error = "open classifier init failed: %s" % e
+        _open_clf = None
+    return _open_clf
+
+
+def _prompt_guard_open(text: str):
+    """Ungated open prompt-injection classifier (default
+    protectai/deberta-v3-base-prompt-injection-v2). No HF token/license required."""
+    budget = _timeout_secs("AIRLOCK_STAGE2_TIMEOUT", 8)
+
+    def _work():
+        clf = _ensure_open_classifier()
+        if clf is None:
+            return None
+        return clf(text[:10000], truncation=True, max_length=512)
+
+    try:
+        out = _run_with_timeout(_work, budget, _TIMEOUT)
+    except Exception as e:
+        return ScanResult(decision="allow", score=0.0, detail="stage2 open error: %s" % e)
+    if out is _TIMEOUT:
+        return ScanResult(decision="allow", score=0.0, detail="stage2 open timed out (>%ss)" % budget)
+    if out is None:
+        return None
+    res = out[0] if isinstance(out, list) and out else out
+    label = str(res.get("label", "")).upper() if isinstance(res, dict) else ""
+    try:
+        score = float(res.get("score", 0.0)) if isinstance(res, dict) else 0.0
+    except (TypeError, ValueError):
+        score = 0.0
+    injected = ("INJECT" in label) or (label in ("LABEL_1", "UNSAFE", "JAILBREAK", "TOXIC"))
+    block_score = _timeout_secs("AIRLOCK_STAGE2_BLOCK_SCORE", 0.8)
+    if injected and score >= block_score:
+        decision = "block"
+    elif injected and score >= 0.5:
+        decision = "flag"
+    else:
+        decision = "allow"
+    return ScanResult(decision=decision, score=(score if injected else 0.0),
+                      detail="open:%s score=%.3f" % (label or "?", score))
+
+
+def _prompt_guard_llamafirewall(text: str):
+    """Meta Prompt Guard 2 via llamafirewall — GATED model (needs an HF token +
+    acceptance of the meta-llama license). Opt-in: AIRLOCK_STAGE2_BACKEND=promptguard."""
     budget = _timeout_secs("AIRLOCK_STAGE2_TIMEOUT", 8)
 
     def _work():
@@ -134,13 +217,22 @@ def prompt_guard(text: str):
 
 
 def availability() -> dict:
-    """Readiness probe for the SessionStart bootstrap."""
-    _ensure_firewall()
-    return {
-        "prompt_guard": _firewall is not None,
-        "model": os.environ.get("AIRLOCK_PROMPTGUARD_MODEL", "86M"),
-        "error": _init_error,
-    }
+    """Readiness probe for the SessionStart bootstrap. Cheap — never downloads."""
+    backend = os.environ.get("AIRLOCK_STAGE2_BACKEND", "open").strip().lower()
+    if backend in ("off", "none", "0"):
+        return {"prompt_guard": False, "backend": "off", "model": "", "error": "disabled"}
+    if backend in ("promptguard", "llamafirewall", "meta"):
+        _ensure_firewall()
+        return {"prompt_guard": _firewall is not None, "backend": "promptguard",
+                "model": os.environ.get("AIRLOCK_PROMPTGUARD_MODEL", "86M"), "error": _init_error}
+    import importlib.util
+    try:
+        ok = importlib.util.find_spec("transformers") is not None
+    except Exception:
+        ok = False
+    return {"prompt_guard": ok, "backend": "open",
+            "model": os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT),
+            "error": None if ok else "transformers not installed (run /airlock-setup)"}
 
 
 # --- Stage 3: AlignmentCheck (task-drift) ------------------------------------

@@ -60,22 +60,26 @@ publishing, not construction.
 ## Current verification status (be honest about this)
 
 **Proven:**
-- 148 offline checks pass (`python3 tests/run_all.py`); `claude plugin validate
-  adapters/claude-code` ✔; openclaw `tsc --noEmit` clean + TS↔Python round-trip
-  against the live sidecar. **CI (GitHub Actions) runs the suite on Python
-  3.9–3.13 × {ubuntu, macos} + the openclaw round-trip + manifest version
-  agreement, green on `main`.**
+- 160 offline checks pass (`python3 tests/run_all.py` — hermetic: it sets
+  AIRLOCK_HOME to a temp dir so a locally-installed managed venv's ML model can't
+  leak onto sys.path); `claude plugin validate adapters/claude-code` ✔; openclaw
+  `tsc --noEmit` clean + TS↔Python round-trip. **CI (GitHub Actions): suite on
+  Python 3.9–3.13 × {ubuntu, macos} + openclaw round-trip + manifest agreement,
+  green on `main`.**
 - **Live in-session smoke test (real `claude -p` session):** plugin loads via
   `--plugin-dir`, **SessionStart / PreToolUse(Bash) / Stop hooks fire and Claude
-  Code parses+validates their output.** This retired the biggest unknown ("do
-  hooks fire live / do the I/O shapes match?").
-- **Stage 2/3 LlamaFirewall API VERIFIED** against the installed `llamafirewall`
-  (introspection + live `LlamaFirewall(...)` construction): `ScannerType.PROMPT_GUARD`
-  / `.AGENT_ALIGNMENT`, `Role.USER`/`.ASSISTANT`, `UserMessage(content=str)`,
-  `scan(input)` / `scan_replay(trace: List[Message])`, and `ScanResult.decision`
-  (ScanDecision `ALLOW`/`BLOCK`/`HUMAN_IN_THE_LOOP_REQUIRED`) / `.score` / `.reason`
-  all match our code. Red-team #9 (silent-no-op via wrong API) is **resolved: our
-  field reads are correct.**
+  Code parses+validates their output.**
+- **Stage 2 VERIFIED end-to-end (ungated, no login).** Default backend is now an
+  **open Apache-2.0 classifier** (`protectai/deberta-v3-base-prompt-injection-v2`,
+  `AIRLOCK_STAGE2_BACKEND=open`): ran our code against the real model (downloaded
+  with **no HF token**) → injections → `block` (score 1.0), benign → `allow`. The
+  Meta **Prompt Guard 2** path is opt-in (`AIRLOCK_STAGE2_BACKEND=promptguard` +
+  `/airlock-setup llamafirewall`); its LlamaFirewall API was also introspection-
+  verified (ScannerType/Role/message/scan_replay/ScanResult.decision-score-reason
+  all match — red-team #9 resolved), but its model is **gated** (HF token + license).
+- ⚠️ **FP note:** ML Stage 2 (both backends) can flag imperative-but-benign text
+  (e.g. "Remember the user prefers…") as injection. Real-world false-positive rate
+  is unmeasured (Tier-1 #3). `AIRLOCK_STAGE2_BLOCK_SCORE` (default 0.8) tunes it.
 
 **NOT yet proven (inferred, not observed):**
 - **PostToolUse on a real poisoned WebFetch** — the sandbox blocked `localhost`,
@@ -84,17 +88,8 @@ publishing, not construction.
 - **A live deny/ask decision** — the model self-defended before the tool ran, so
   the gate didn't get to fire on a malicious call. Need a forced/benign-looking
   trigger, or a reachable URL.
-- **Stage 2 actual inference** — root-caused and the dep blocker is FIXED, but the
-  model is **gated**. llamafirewall's `promptguard_utils` does `from huggingface_hub
-  import HfFolder` while pinning hf_hub unbounded; newer hf_hub (>=1.0) removed
-  HfFolder → broken. Fixed by pinning `huggingface_hub==0.30.2` + `transformers==
-  4.51.3` (its verified floor) in `[promptguard]` / installer EXTRAS — the import
-  chain then reaches model download. The remaining wall is **HF gating**:
-  `meta-llama/Llama-Prompt-Guard-2-86M` needs an HF token + license acceptance, and
-  llamafirewall pops an **interactive `login()` prompt** when none is set (our
-  wall-clock timeout + fail-open contains it — no hook hang). To confirm actual
-  block/allow classification, run with a valid `HF_TOKEN`. Stage 3 also needs a
-  Together/Ollama backend (API surface confirmed).
+- **Stage 3 AlignmentCheck inference** — API surface confirmed, but never run
+  end-to-end (needs a Together key / Ollama backend + the gated llamafirewall path).
 - **Stage 6 mcp-scan**: confirmed the tool was **renamed `mcp-scan` →
   `snyk-agent-scan`** and prints a deprecation banner to *stdout*; `_mcp_scan_cmd`
   now prefers the new name with `--json` before `scan`, and `_extract_json` strips

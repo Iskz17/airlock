@@ -29,16 +29,18 @@ Issues = "https://github.com/Iskz17/airlock/issues"
 # Stages 0, 1 and 4 run on the standard library alone. The heavier detectors are
 # opt-in so the base install stays tiny and fully offline.
 [project.optional-dependencies]
-# llamafirewall pins huggingface-hub with no upper bound, but its code imports
-# HfFolder (removed in hf_hub 1.0) — so a bare install breaks. Pin to the verified
-# working floor. Stage 2 ALSO needs an HF token + acceptance of the gated
-# meta-llama Prompt Guard 2 license at runtime (else it fails open).
-promptguard = ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"]
-pii = ["presidio-analyzer", "presidio-anonymizer"]  # Stage 4: richer PII egress
-ocr = ["pytesseract", "Pillow"]                     # Stage 2b: multimodal image OCR
-mcp = ["snyk-agent-scan"]                           # Stage 6: MCP supply-chain enrichment (was mcp-scan)
-all = ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3",
-       "presidio-analyzer", "presidio-anonymizer", "pytesseract", "Pillow", "snyk-agent-scan"]
+# Stage 2 default is an UNGATED open classifier (no HF login/license) — just needs
+# torch+transformers. `all` is the fully ungated set.
+promptguard = ["torch", "transformers", "sentencepiece"]   # Stage 2: open prompt-injection classifier
+pii = ["presidio-analyzer", "presidio-anonymizer"]         # Stage 4: richer PII egress
+ocr = ["pytesseract", "Pillow"]                            # Stage 2b: multimodal image OCR
+mcp = ["snyk-agent-scan"]                                  # Stage 6: MCP supply-chain enrichment (was mcp-scan)
+all = ["torch", "transformers", "sentencepiece", "presidio-analyzer",
+       "presidio-anonymizer", "pytesseract", "Pillow", "snyk-agent-scan"]
+# Opt-in, NOT in `all`: Meta Prompt Guard 2 backend (gated HF model) + Stage 3
+# AlignmentCheck. llamafirewall imports HfFolder (removed in hf_hub>=1.0) yet pins
+# it unbounded, so pin to its verified floor.
+llamafirewall = ["llamafirewall", "huggingface_hub==0.30.2", "transformers==4.51.3"]
 
 [project.scripts]
 airlock-scan = "guard_core.cli:main"

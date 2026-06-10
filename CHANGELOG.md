@@ -4,10 +4,22 @@ All notable changes to airlock are documented here. Versions follow semver.
 
 ## [Unreleased]
 
+### Changed — Stage 2 needs no account/login/subscription
+- **Default Stage 2 backend is now an UNGATED, openly-licensed classifier**
+  (`protectai/deberta-v3-base-prompt-injection-v2`, Apache-2.0) — **no Hugging Face
+  login, no license, no subscription.** Verified end-to-end (injection → block,
+  benign → allow) with no token. New env: `AIRLOCK_STAGE2_BACKEND`
+  (`open`/`promptguard`/`off`), `AIRLOCK_STAGE2_MODEL`, `AIRLOCK_STAGE2_BLOCK_SCORE`.
+- Meta **Prompt Guard 2** is now an **opt-in** backend
+  (`AIRLOCK_STAGE2_BACKEND=promptguard` + `/airlock-setup llamafirewall`); its model
+  is gated. The `promptguard` extra / `all` are now fully ungated (torch +
+  transformers + sentencepiece); `llamafirewall` is a separate, non-`all` extra.
+
 ### Added
 - **CI** (GitHub Actions): test suite on Python 3.9–3.13 × {ubuntu, macos},
   openclaw `tsc` + sidecar round-trip, and manifest/version-agreement checks.
-  README CI/license/python badges.
+  README CI/license/python badges. Test suite is now hermetic (isolates
+  `AIRLOCK_HOME` so a local managed venv's ML model can't perturb results).
 
 ### Changed / Fixed (verified against the real libraries)
 - **Stage 2/3 LlamaFirewall API confirmed correct** by introspecting the installed

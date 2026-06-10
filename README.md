@@ -11,7 +11,7 @@ A layered prompt-injection / agent-security guard with a **shared core** and **t
 **Ingress** (content entering context):
 - **Invisible-Unicode / ASCII smuggling** (Stage 0): Unicode Tag block (U+E0000–E007F), zero-width, bidi overrides, supplementary variation selectors. Hidden payloads are **decoded and surfaced**, not silently dropped. Offline, deterministic, high precision.
 - **Overt injection** (Stage 1): high-precision regex for assistant-directed instructions ("ignore previous instructions", exfiltration asks, role hijacks, …). Offline.
-- **Subtle/obfuscated injection** (Stage 2): Meta **Prompt Guard 2** via `llamafirewall`, when installed. Local model, no per-request network.
+- **Subtle/obfuscated injection** (Stage 2): an **ungated, openly-licensed** ML classifier (`protectai/deberta-v3-base-prompt-injection-v2`, Apache-2.0) — no account or login. Local model, no per-request network. Meta **Prompt Guard 2** is available as an opt-in backend (`AIRLOCK_STAGE2_BACKEND=promptguard`).
 - **Multimodal** (Stage 2b): OCR an ingested image/screenshot → feed extracted text (incl. low-contrast/hidden) back through Stages 0–2. Optional deps (pytesseract/Pillow); mainly for browser/computer-use agents.
 
 **Action** (before the agent acts):
@@ -41,7 +41,7 @@ Install airlock and you're **immediately protected at every boundary, fully offl
 |---|---|---|---|
 | **0** invisible-Unicode | ingress | ✅ on | — (stdlib, offline) |
 | **1** heuristics | ingress | ✅ on | — (stdlib, offline) |
-| **2** Prompt Guard 2 | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + model; **also needs `HF_TOKEN` + accepting the gated meta-llama Prompt Guard 2 license** |
+| **2** ML injection classifier | ingress | ⬜ opt-in | `/airlock-setup` *(or `promptguard`)* — pulls PyTorch + an **ungated, openly-licensed** model. **No account/login/subscription.** |
 | **2b** image OCR | ingress | ⬜ opt-in | `/airlock-setup ocr` **+** system `tesseract` (`brew install tesseract`) |
 | **3** AlignmentCheck (task drift) | action | ⬜ opt-in | `AIRLOCK_ALIGN_BACKEND=together` + `TOGETHER_API_KEY` (or Ollama) — a service, *not a download* |
 | **4** egress exfil (secrets + MD sinks) | egress | ✅ on | — (stdlib, offline) |
@@ -67,7 +67,9 @@ export AIRLOCK_AUTO_INSTALL_EXTRAS=promptguard,ocr  # optional: narrow the set
 
 Prefer your own environment instead of the managed venv? `pip install "airlock-guard-core[all]"` (or `[promptguard]` / `[pii]` / `[ocr]` / `[mcp]`).
 
-> Some stages need more than a download: **Stage 2** needs a Hugging Face token (`HF_TOKEN`/`huggingface-cli login`) and acceptance of the gated *meta-llama Prompt Guard 2* license — without it the model can't download and Stage 2 fails open (airlock's timeout prevents the library's interactive login prompt from hanging a hook). **Stage 2b** also needs the system `tesseract` binary; **Stage 3** needs an LLM backend (Together key / Ollama). The `[promptguard]` extra pins `huggingface_hub==0.30.2` + `transformers==4.51.3` because llamafirewall's unbounded pin otherwise pulls an hf_hub that removed a symbol it imports.
+> **Stage 2 needs no account or login** — it uses an ungated, Apache-2.0 prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2` by default; override with `AIRLOCK_STAGE2_MODEL`). A couple of *other* stages still need more than a download: **Stage 2b** needs the system `tesseract` binary; **Stage 3** needs an LLM backend (Together key / Ollama).
+>
+> Prefer Meta's **Prompt Guard 2** instead? Set `AIRLOCK_STAGE2_BACKEND=promptguard` and `/airlock-setup llamafirewall` — note *that* model is gated (needs an `HF_TOKEN` + accepting Meta's license).
 
 ## Use
 
@@ -83,7 +85,10 @@ Prefer your own environment instead of the managed venv? `pip install "airlock-g
 | `AIRLOCK_STAGE0/1/2` | on | disable an individual stage |
 | `AIRLOCK_BLOCK_THRESHOLD` | `3` | severity (1–3) to block vs. only flag |
 | `AIRLOCK_STRIP_ZWJ` | off | also strip ZWJ/ZWNJ (off preserves emoji + Persian/Indic) |
-| `AIRLOCK_PROMPTGUARD_MODEL` | `86M` | Prompt Guard 2 size (`86M`/`22M`) |
+| `AIRLOCK_STAGE2_BACKEND` | `open` | `open` (ungated classifier) / `promptguard` (Meta Prompt Guard 2, gated) / `off` |
+| `AIRLOCK_STAGE2_MODEL` | `protectai/deberta-v3-base-prompt-injection-v2` | HF repo for the `open` backend |
+| `AIRLOCK_STAGE2_BLOCK_SCORE` | `0.8` | open-backend injection score to block vs. flag |
+| `AIRLOCK_PROMPTGUARD_MODEL` | `86M` | Prompt Guard 2 size (`86M`/`22M`) — only the `promptguard` backend |
 | `AIRLOCK_EGRESS_ALLOWLIST` | empty | comma-separated hosts exempt from the data-param heuristic |
 | `AIRLOCK_EGRESS_BLOCK` | off | `1` → deny outbound on detection (default: ask) |
 | `AIRLOCK_EGRESS_PII` | off | `1` → also run Presidio PII (needs `presidio-analyzer`) |

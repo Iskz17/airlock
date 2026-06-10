@@ -24,7 +24,7 @@ def check(name, cond):
 
 # 1) expand(): names -> packages, 'all' fans out, dedupe, unknown ignored.
 check("expand promptguard", installer.expand(["promptguard"]) == installer.EXTRAS["promptguard"]
-      and "llamafirewall" in installer.expand(["promptguard"]))
+      and "transformers" in installer.expand(["promptguard"]))
 check("expand all covers every extra",
       set(installer.expand(["all"])) == {p for v in installer.EXTRAS.values() for p in v})
 check("expand dedupes", installer.expand(["promptguard", "promptguard"]) == installer.EXTRAS["promptguard"])
@@ -33,7 +33,10 @@ check("expand pipe/comma + unknown",
 
 # 2) install(dry_run) builds the right intent without running anything.
 ok, log = installer.install(["promptguard"], dry_run=True)
-check("dry-run ok", ok and "llamafirewall" in log and "would install" in log)
+check("dry-run ok", ok and "transformers" in log and "would install" in log)
+# gated llamafirewall is its own extra, NOT part of `all`
+check("all excludes gated llamafirewall", "llamafirewall" not in installer.expand(["all"]))
+check("gated extra installs when named", "llamafirewall" in installer.expand(["llamafirewall"]))
 ok2, log2 = installer.install(["nope"], dry_run=True)
 check("dry-run unknown extras -> not ok", ok2 is False and "no known extras" in log2)
 

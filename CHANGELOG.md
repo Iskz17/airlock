@@ -4,6 +4,8 @@ All notable changes to airlock are documented here. Versions follow semver.
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-06-11
+
 ### Added — Stage 3 task-drift now has an open, no-subscription backend (Ollama)
 - **Local Ollama judge for Stage 3 (AlignmentCheck)** — talks directly to a local
   Ollama server over HTTP (**stdlib `urllib` only**): no API key, no subscription,

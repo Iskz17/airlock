@@ -57,16 +57,23 @@ pinned to the release `ref` + `sha`). Bump it on each release.
 ## 2. PyPI (`airlock-guard-core`)
 
 [pyproject.toml](../pyproject.toml) is ready (stdlib-only core; extras
-`promptguard`/`pii`/`ocr`/`mcp`/`all`).
+`promptguard`/`pii`/`ocr`/`mcp`/`all`). Build-verified at **0.2.4**: the wheel
+contains only `guard_core/` (15 modules), nothing from `adapters/` or `tests/`.
 
 ```bash
+# Option A — uv (already installed; this is what build-verified 0.2.4):
+uv build                          # -> dist/airlock_guard_core-0.2.4{.tar.gz,-py3-none-any.whl}
+uv publish --token "$PYPI_TOKEN"  # uploads dist/* to PyPI
+
+# Option B — build + twine:
 python3 -m pip install --upgrade build twine
-python3 -m build                 # -> dist/airlock_guard_core-0.2.3{.tar.gz,-py3-none-any.whl}
-twine upload dist/*              # needs a PyPI token
+python3 -m build                  # -> dist/airlock_guard_core-0.2.4{.tar.gz,-py3-none-any.whl}
+TWINE_USERNAME=__token__ TWINE_PASSWORD="$PYPI_TOKEN" twine upload dist/*
 ```
 
-Ships the `airlock-scan` console script and `python3 -m guard_core.server`
-(the sidecar the openclaw adapter calls).
+Needs a **PyPI account + API token**; the name `airlock-guard-core` must be free
+(or owned by you) on first publish. Ships the `airlock-scan` console script and
+`python3 -m guard_core.server` (the sidecar the openclaw adapter calls).
 
 ## 3. npm (`airlock-openclaw`)
 
@@ -75,17 +82,21 @@ Ships the `airlock-scan` console script and `python3 -m guard_core.server`
 directly on Node ≥22.6 (type-stripping); it has no runtime deps and reaches the
 Python core via the sidecar.
 
+Pack-verified at **0.2.4**: 10 files / 12 kB (`src/*.ts` + `openclaw.plugin.json`
++ README + package.json); no `test/` or `node_modules`.
+
 ```bash
 cd adapters/openclaw
 npm install                      # dev only (typescript, @types/node) for typecheck
 npm run typecheck && npm test    # test needs a running `python3 -m guard_core.server`
-npm publish                      # needs an npm token
+npm pack --dry-run               # preview the tarball before publishing
+npm publish                      # needs `npm login` or NPM_TOKEN; access:public is set
 ```
 
 ## Verify before any publish
 
 ```bash
-python3 tests/run_all.py                       # 101 offline checks
+python3 tests/run_all.py                       # 227 offline checks
 claude plugin validate adapters/claude-code    # plugin manifest
 ( python3 -m guard_core.server & sleep 1; cd adapters/openclaw && npm test; kill %1 )
 ```

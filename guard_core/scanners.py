@@ -29,11 +29,15 @@ from dataclasses import dataclass
 _firewall = None
 _init_error = None
 _initialized = False
+_fw_lock = threading.Lock()  # mirror _open_lock: serialize the one-time firewall build
 
 # Stage 2 default backend = an UNGATED open classifier (no HF login/license).
 _open_clf = None
 _open_init_error = None
 _open_initialized = False
+# Serializes the (one-time, possibly slow) classifier build so a prewarm thread
+# and a concurrent request in the ThreadingHTTPServer sidecar can't both load it.
+_open_lock = threading.Lock()
 _OPEN_MODEL_DEFAULT = "protectai/deberta-v3-base-prompt-injection-v2"  # Apache-2.0, not gated
 
 _TIMEOUT = object()  # sentinel: work exceeded its wall-clock budget
@@ -81,23 +85,27 @@ def _ensure_firewall():
     global _firewall, _init_error, _initialized
     if _initialized:
         return _firewall
-    _initialized = True
-    try:
-        from .installer import add_managed_to_path
-        add_managed_to_path()
-    except Exception:
-        pass
-    try:
-        from llamafirewall import LlamaFirewall, Role, ScannerType  # type: ignore
-    except Exception as e:  # ImportError or transitive failure
-        _init_error = "llamafirewall unavailable: %s" % e
-        return None
-    try:
-        _firewall = LlamaFirewall(scanners={Role.USER: [ScannerType.PROMPT_GUARD]})
-    except Exception as e:
-        _init_error = "LlamaFirewall init failed: %s" % e
-        _firewall = None
-    return _firewall
+    with _fw_lock:
+        if _initialized:  # another thread finished while we waited
+            return _firewall
+        try:
+            from .installer import add_managed_to_path
+            add_managed_to_path()
+        except Exception:
+            pass
+        try:
+            from llamafirewall import LlamaFirewall, Role, ScannerType  # type: ignore
+        except Exception as e:  # ImportError or transitive failure
+            _init_error = "llamafirewall unavailable: %s" % e
+            _initialized = True
+            return None
+        try:
+            _firewall = LlamaFirewall(scanners={Role.USER: [ScannerType.PROMPT_GUARD]})
+        except Exception as e:
+            _init_error = "LlamaFirewall init failed: %s" % e
+            _firewall = None
+        _initialized = True
+        return _firewall
 
 
 def _map_decision(d) -> str:
@@ -126,28 +134,38 @@ def prompt_guard(text: str):
 
 def _ensure_open_classifier():
     """Lazily build the ungated text-classification pipeline (downloads the model
-    on first call). Returns it or None; records why in _open_init_error."""
+    on first call). Returns it or None; records why in _open_init_error.
+
+    Thread-safe via double-checked locking: the `_open_initialized` flag is only
+    set AFTER the build settles, so a concurrent caller blocks on `_open_lock`
+    until the model is ready (then both see the same instance) rather than racing
+    a half-built pipeline. Callers on the hot path wrap this in _run_with_timeout,
+    so a thread that waits on the lock still fails open at its budget."""
     global _open_clf, _open_init_error, _open_initialized
     if _open_initialized:
         return _open_clf
-    _open_initialized = True
-    try:
-        from .installer import add_managed_to_path
-        add_managed_to_path()
-    except Exception:
-        pass
-    try:
-        from transformers import pipeline  # type: ignore
-    except Exception as e:
-        _open_init_error = "transformers unavailable: %s" % e
-        return None
-    model = os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT)
-    try:
-        _open_clf = pipeline("text-classification", model=model)
-    except Exception as e:
-        _open_init_error = "open classifier init failed: %s" % e
-        _open_clf = None
-    return _open_clf
+    with _open_lock:
+        if _open_initialized:  # another thread finished while we waited
+            return _open_clf
+        try:
+            from .installer import add_managed_to_path
+            add_managed_to_path()
+        except Exception:
+            pass
+        try:
+            from transformers import pipeline  # type: ignore
+        except Exception as e:
+            _open_init_error = "transformers unavailable: %s" % e
+            _open_initialized = True
+            return None
+        model = os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT)
+        try:
+            _open_clf = pipeline("text-classification", model=model)
+        except Exception as e:
+            _open_init_error = "open classifier init failed: %s" % e
+            _open_clf = None
+        _open_initialized = True
+        return _open_clf
 
 
 def _prompt_guard_open(text: str):
@@ -176,9 +194,11 @@ def _prompt_guard_open(text: str):
     except (TypeError, ValueError):
         score = 0.0
     injected = ("INJECT" in label) or (label in ("LABEL_1", "UNSAFE", "JAILBREAK", "TOXIC"))
-    # Default 0.98: on a hard-negative eval corpus (tests/eval_stage2.py) the open
-    # classifier's scores are bimodal, so 0.98 removes benign-imperative false
-    # positives ("ignore the outliers", "you are now connected…") at no recall cost.
+    # Default 0.98 removes the benign-imperative false positives the open classifier
+    # emits at lower cutoffs ("ignore the outliers", "you are now connected…"). NOTE:
+    # on the expanded 93-item eval (tests/eval_stage2.py) the scores are NOT cleanly
+    # bimodal — the open classifier is genuinely noisy on security-adjacent prose
+    # (~25% FP), so Stage 1 heuristics, not this threshold, carry precision.
     block_score = _timeout_secs("AIRLOCK_STAGE2_BLOCK_SCORE", 0.98)
     if injected and score >= block_score:
         decision = "block"
@@ -237,6 +257,40 @@ def availability() -> dict:
     return {"prompt_guard": ok, "backend": "open",
             "model": os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT),
             "error": None if ok else "transformers not installed (run /airlock-setup)"}
+
+
+def prewarm() -> dict:
+    """Eagerly load the Stage 2 classifier so the FIRST ingress scan in a
+    long-lived process doesn't pay the cold model-load on the hot path (where its
+    wall-clock budget would expire and the scan would fail open).
+
+    Intended for the persistent HTTP sidecar — call it once at boot, off the
+    request path (e.g. a daemon thread). It is a no-op when Stage 2 is disabled or
+    its backend isn't installed, and never raises. Unlike the hot-path scan it is
+    NOT time-bounded: it is meant to take however long the one-time load needs.
+
+    NOTE: this only helps long-lived processes. Per-invocation hooks (Claude Code
+    spawns a fresh process per tool event) keep no state between calls, so there
+    is nothing to warm there — the model is reloaded each event regardless."""
+    backend = os.environ.get("AIRLOCK_STAGE2_BACKEND", "open").strip().lower()
+    if backend in ("off", "none", "0"):
+        return {"prewarmed": False, "backend": "off", "reason": "stage2 disabled"}
+    if backend in ("promptguard", "llamafirewall", "meta"):
+        ok = _ensure_firewall() is not None
+        return {"prewarmed": ok, "backend": "promptguard",
+                "reason": None if ok else (_init_error or "llamafirewall unavailable")}
+    # open backend (default): build the pipeline, then run one tiny inference so
+    # the first REAL scan pays neither the build nor the first-call warmup.
+    clf = _ensure_open_classifier()
+    if clf is None:
+        return {"prewarmed": False, "backend": "open",
+                "reason": _open_init_error or "transformers not installed"}
+    try:
+        clf("airlock prewarm", truncation=True, max_length=512)
+    except Exception:
+        pass  # the build is what matters; a failed warmup inference is harmless
+    return {"prewarmed": True, "backend": "open",
+            "model": os.environ.get("AIRLOCK_STAGE2_MODEL", _OPEN_MODEL_DEFAULT)}
 
 
 # --- Stage 3: AlignmentCheck (task-drift) ------------------------------------

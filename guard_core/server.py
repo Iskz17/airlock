@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from guard_core.config import Config
@@ -161,11 +162,35 @@ def serve(host=None, port=None):
     return httpd
 
 
+def _maybe_prewarm():
+    """Warm the Stage 2 model in a background daemon thread at sidecar boot so the
+    first real /ingress doesn't cold-load it on the request path and fail open
+    (the openclaw client cap is shorter than a cold model load). Off the request
+    path, never blocks serving, and a no-op when Stage 2 is off/uninstalled.
+    Opt out with AIRLOCK_PREWARM=0."""
+    if os.environ.get("AIRLOCK_PREWARM", "1").strip().lower() in ("0", "off", "false", "no"):
+        return
+
+    def _warm():
+        import sys
+        try:
+            from guard_core.scanners import prewarm
+            info = prewarm()
+            if info.get("prewarmed"):
+                sys.stderr.write("[airlock] stage2 prewarmed (%s)\n"
+                                 % (info.get("model") or info.get("backend") or "open"))
+        except Exception:
+            pass  # warming is best-effort; the hot path still works cold (fails open)
+
+    threading.Thread(target=_warm, daemon=True).start()
+
+
 def main():
     httpd = serve()
     host, port = httpd.server_address
     import sys
     sys.stderr.write("[airlock] sidecar listening on http://%s:%s\n" % (host, port))
+    _maybe_prewarm()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

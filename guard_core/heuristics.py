@@ -24,6 +24,19 @@ _PATTERNS = [
     ("ai_meta_address", 2,
      r"\bif\s+you(?:'re|\s+are)\s+(?:an?\s+)?(ai|a\.i\.|assistant|agent|language\s+model|llm|chatbot|bot)\b"
      r"|\bto\s+the\s+(ai|assistant|agent|model|llm)\s+(reading|processing|that)\b"),
+    # Polite "important instructions" / EchoLeak-style indirect injection: data that
+    # addresses the assistant about ITS task and slips in a pre/post-task directive.
+    # No "ignore previous instructions" verb fires here, so instruction_override
+    # misses it; left to Stage 2 alone it's defeated by dilution (injection wrapped
+    # in benign prose drops below the block threshold). High-precision: anchored on
+    # "the task I gave you" / addressing "you, the <AI>" — phrasing benign tool
+    # output essentially never contains. (Surfaced by the AgentDojo eval.)
+    ("embedded_task_injection", 2,
+     r"\bbefore\s+you\s+(?:can\s+)?(?:solve|answer|complete|finish|continue|proceed|do)\b"
+     r"[^.\n]{0,50}\btask\b[^.\n]{0,40}\b(?:do\s+the\s+following|please\s+do|do\s+this|first)\b"
+     r"|\bthe\s+task\s+(?:that\s+)?i\s+(?:gave|assigned|asked|set)\s+you\b"
+     r"|\bmessage\s+(?:from\s+[^.\n]{0,30}\s+)?to\s+you,?\s+(?:the\s+)?(?:\w+\s+)?"
+     r"(?:ai|a\.i\.|assistant|agent|model|language\s+model|llm|chatbot|bot)\b"),
     ("exfiltration", 3,
      r"\b(reveal|expose|print|show|send|email|e-mail|leak|disclose|output|forward|exfiltrate|dump|"
      r"extract|steal|harvest|siphon)\b"

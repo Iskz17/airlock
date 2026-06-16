@@ -94,24 +94,42 @@ interface AgentCtx {
 }
 
 // --- helpers ----------------------------------------------------------------
-function splitResultText(msg: ToolResultMessage | undefined): {
-  text: string;
-  nonText: ContentBlock[];
-} {
-  if (!msg) return { text: "", nonText: [] };
-  const c = msg.content;
-  if (typeof c === "string") return { text: c, nonText: [] };
-  if (!Array.isArray(c)) return { text: "", nonText: [] };
-  const text: string[] = [];
-  const nonText: ContentBlock[] = [];
-  for (const b of c) {
-    if (b && typeof b === "object" && b.type === "text" && typeof (b as TextContentBlock).text === "string") {
-      text.push((b as TextContentBlock).text);
-    } else if (b) {
-      nonText.push(b);
+// Model-visible text carried by a block, regardless of its `type` and regardless
+// of whether the string sits under `text`/`content`/`value`. Scanning ALL of
+// these (not just type==="text" .text) closes the red-team bypass where an
+// injection rode in a non-"text" block or under an alternate key (F2). A block
+// with NO such string (e.g. an image with only `source`/base64) returns "" and is
+// treated as structural — preserved untouched.
+// Keys that hold binary/structural data (image bytes, MIME types, ids), never
+// model-visible instruction text — skipped so an image block stays "structural"
+// (preserved) and its base64 isn't mistaken for scannable text. (Text authored
+// directly under one of these keys would go unscanned, but the host — not the
+// attacker — controls block key names, and these are reserved for non-text data.)
+const _SKIP_KEYS = new Set([
+  "type", "source", "data", "mimetype", "mediatype", "blob", "bytes", "base64",
+  "id", "toolcallid", "tool_call_id",
+]);
+function _blockText(b: unknown, depth = 0): string {
+  if (b == null || depth > 5) return "";
+  if (typeof b === "string") return b;
+  if (Array.isArray(b)) return b.map((x) => _blockText(x, depth + 1)).filter(Boolean).join("\n");
+  if (typeof b === "object") {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(b as Record<string, unknown>)) {
+      if (_SKIP_KEYS.has(k.toLowerCase())) continue;
+      const t = _blockText(v, depth + 1); // recurse: nested resource/document text (MCP) too
+      if (t) parts.push(t);
     }
+    return parts.join("\n");
   }
-  return { text: text.join("\n"), nonText };
+  return "";
+}
+
+function _blocksOf(msg: ToolResultMessage | undefined): ContentBlock[] {
+  if (!msg) return [];
+  const c = msg.content;
+  if (typeof c === "string") return [{ type: "text", text: c }];
+  return Array.isArray(c) ? c : [];
 }
 
 function toGate(action: "block" | "requireApproval", reason: string): BeforeToolCallResult {
@@ -150,11 +168,16 @@ export async function toolResultPersist(
 ): Promise<ToolResultPersistResult | undefined> {
   try {
     const msg = event?.message;
-    const { text, nonText } = splitResultText(msg);
-    if (!text.trim()) return undefined;
-    const r = await sanitizeToolResult(text, "");
+    const blocks = _blocksOf(msg);
+    const combined = blocks.map((b) => _blockText(b)).filter(Boolean).join("\n");
+    if (!combined.trim()) return undefined;
+    const r = await sanitizeToolResult(combined, "");
     if (!r.changed) return undefined;
-    const content: ContentBlock[] = [{ type: "text", text: r.content }, ...nonText];
+    // Flagged: replace ALL text-bearing blocks with the single sanitized/quarantined
+    // block (so injected text in any block — including non-"text" ones — is
+    // neutralized), and preserve purely structural blocks (images/binary) untouched.
+    const structural = blocks.filter((b) => !_blockText(b));
+    const content: ContentBlock[] = [{ type: "text", text: r.content }, ...structural];
     return { message: { ...(msg as ToolResultMessage), content } };
   } catch {
     return undefined; // fail open

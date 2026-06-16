@@ -17,7 +17,30 @@
 - Repro: `adapters/openclaw/test/redteam_probe.ts` (TS, drives the real handlers)
   + direct `/egress` `/ingress` probes. Live results inline below.
 
-## Findings (severity-ranked)
+## Status: FIXED (2026-06-16)
+
+All six findings are now fixed and regression-tested (probe:
+`adapters/openclaw/test/redteam_probe.ts`, 11/11; egress test +
+`tests/test_egress.py`; openclaw round-trip green), and the fixes passed two rounds
+of independent adversarial review (a first round caught further holes — a nested
+MCP `resource.text` carrier and a deep-nest fail-open — which were then closed).
+
+| # | Sev | Title | Fix |
+|---|-----|-------|-----|
+| 1 | **Major** | Array-argv exec evades the file-exfil detector | `gateToolCall` collects + joins array/nested command args (`_collectByKeys`, depth 6) → command channel fires; backstopped by a weight-2 text-channel `sensitive_file_exfil` in `egress.py`. |
+| 2 | **Major** | Non-`text` content blocks bypass the ingress true-strip | `toolResultPersist` scans text from **every** block via a recursive `_blockText` (incl. nested MCP `resource.text`, alt keys), neutralizes flagged text, preserves no-text structural blocks (images). |
+| 3 | **Medium** | Unguarded `JSON.stringify` throw → silent allow | `gateToolCall` now fails **safe** (requireApproval) on unserializable args. |
+| 4 | **Medium-High** | Attacker-triggerable fail-open | Partially mitigated (Stage 2 pre-warm removes the cold-load timeout); the rest is the deliberate fail-open posture. Defense-in-depth (chunk-scan/surface) remains future work. |
+| 5 | **Medium** | Masked / nested URL evades the url-exfil detector | Adapter collects all URL-like values; core scans bare URLs in the `text` channel. |
+| 6 | **Low-Med** | Outgoing-message metadata exfil-URL not withheld | `scanForLeaks` withholds on secret/PII + **weight≥2** exfil-URL/sink in metadata. |
+
+> **Expected friction (by design):** the weight-2 text-channel `sensitive_file_exfil`
+> backstop means a tool call whose args co-mention a sensitive path (`id_rsa`/`.env`/
+> `.pem`) *and* an outbound token (`curl`/`http`) prompts for approval (flag, never a
+> hard block; harmless on the reply path). Defensible for a security gate; tighten via
+> read-then-pipe proximity if it proves noisy.
+
+### Original findings (for reference)
 
 | # | Sev | Title | Reachability |
 |---|-----|-------|--------------|

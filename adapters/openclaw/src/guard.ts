@@ -56,30 +56,56 @@ export interface GateResult {
 const _URL_KEYS = ["url", "uri", "href", "link", "endpoint", "address"];
 const _CMD_KEYS = ["command", "cmd", "script", "code", "run", "shell"];
 
-function _firstString(input: Record<string, unknown>, keys: string[]): string {
-  for (const k of keys) {
-    const v = input[k];
-    if (typeof v === "string" && v) return v;
+// Collect string values under any matching key, walking arrays and one+ levels of
+// nesting, and JOINING array-of-strings (argv) into one string. This closes the
+// red-team gaps where a value the detector needs sat in `command: [...]` (array
+// argv) or under a secondary/nested key the old first-top-level-string lookup
+// missed (F1/F5). Depth-bounded.
+function _collectByKeys(input: unknown, keys: string[], depth = 0): string[] {
+  const out: string[] = [];
+  if (!input || typeof input !== "object" || depth > 6) return out;
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    const keyMatch = keys.includes(k.toLowerCase());
+    if (typeof v === "string") {
+      if (keyMatch && v) out.push(v);
+    } else if (Array.isArray(v)) {
+      if (keyMatch) {
+        const joined = v.filter((x): x is string => typeof x === "string").join(" ");
+        if (joined) out.push(joined);
+      }
+      for (const x of v) out.push(..._collectByKeys(x, keys, depth + 1));
+    } else if (v && typeof v === "object") {
+      out.push(..._collectByKeys(v, keys, depth + 1));
+    }
   }
-  return "";
+  return out;
 }
 
 // before_tool_call: gate an outbound/exec tool whose args look like data
 // exfiltration (secret-bearing URL, sensitive-file read piped to network, ...).
 // Dispatch does NOT depend on the tool name: we always send the args as `text`
 // (so secret signatures anywhere are caught) and additionally surface any
-// url-like / command-like field so the url/command-specific detectors fire.
+// url-like / command-like field — incl. array argv and nested args — so the
+// url/command-specific detectors fire.
 export async function gateToolCall(
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<GateResult> {
   const inp = (input ?? {}) as Record<string, unknown>;
   void toolName; // dispatch is field-driven, not name-driven (see _URL_KEYS/_CMD_KEYS)
-  const url = _firstString(inp, _URL_KEYS);
-  const command = _firstString(inp, _CMD_KEYS);
-  const args: { text: string; url?: string; command?: string } = { text: JSON.stringify(inp) };
-  if (url) args.url = url;
-  if (command) args.command = command;
+  let text: string;
+  try {
+    text = JSON.stringify(inp) ?? "";
+  } catch {
+    // Unserializable args (BigInt / circular) can't be inspected -> fail SAFE
+    // (require approval), never fail open. (F3)
+    return { action: "requireApproval", reason: "airlock egress: tool arguments could not be serialized for inspection" };
+  }
+  const urls = _collectByKeys(inp, _URL_KEYS);
+  const commands = _collectByKeys(inp, _CMD_KEYS);
+  const args: { text: string; url?: string; command?: string } = { text };
+  if (urls.length) args.url = urls[0];
+  if (commands.length) args.command = commands.join(" ; ");
   const ev = await egress(args);
   if (ev.decision === "allow") return { action: "allow", reason: "" };
   const detail = ev.findings.slice(0, 4).map((f) => `${f.label} (${f.snippet})`).join("; ");
@@ -97,7 +123,14 @@ export async function gateToolCall(
 export async function scanForLeaks(text: string): Promise<{ leak: boolean; labels: string[] }> {
   if (!text) return { leak: false, labels: [] };
   const ev = await egress({ text });
-  const hits = ev.findings.filter((f) => f.kind === "secret" || f.kind === "pii");
+  // Withhold on confirmed secret/PII AND on strong exfil-URL / markdown sinks (F6):
+  // an exfil URL smuggled in outgoing metadata can't be safely rewritten in place,
+  // so a hit fails safe (withhold the whole message). Gate the URL/sink kinds on
+  // weight>=2 so a weak data-param heuristic (e.g. a signed callback URL that
+  // legitimately lives in routing metadata) doesn't cancel benign delivery.
+  const hits = ev.findings.filter(
+    (f) => f.kind === "secret" || f.kind === "pii"
+      || ((f.kind === "exfil_url" || f.kind === "markdown_sink") && f.weight >= 2));
   return { leak: hits.length > 0, labels: [...new Set(hits.map((f) => f.label))] };
 }
 

@@ -226,6 +226,25 @@ def assess_outbound(text=None, url=None, command=None, pii=None):
         findings += find_secrets(text)
         md, sanitized = find_markdown_sinks(text, allow)
         findings += md
+        # Sensitive-file read piped to the network, seen anywhere in the body — not
+        # only the dedicated `command` channel. Closes openclaw red-team F1/M2 where
+        # an exec command nested too deep to surface as `command` still rides in the
+        # args JSON. Weight 2 (flag/ask) here vs 3 on the command channel: on a plain
+        # reply, path+curl can co-occur benignly, so this asks rather than hard-blocks.
+        if _SENSITIVE_PATH_RX.search(text) and _OUTBOUND_RX.search(text):
+            findings.append(EgressFinding("exfil_command", "sensitive_file_exfil", _clip(text), 2))
+        # Bare URLs in the body (not only markdown/HTML sinks): catches opaque
+        # data-param / data-path exfil that a masked or nested tool arg hides from
+        # the dedicated `url` channel (openclaw red-team F5). _url_is_exfil only
+        # fires on exfil-shaped URLs, so a normal link in a reply isn't flagged.
+        # Skip URLs already captured as markdown/HTML sinks above (avoid double-count).
+        _md_urls = {f.snippet for f in md}
+        for m in _BARE_URL_RX.finditer(text):
+            if _clip(m.group(0)) in _md_urls:
+                continue
+            f = _url_is_exfil(m.group(0), allow)
+            if f:
+                findings.append(f)
         if pii:
             findings += find_pii(text)
 

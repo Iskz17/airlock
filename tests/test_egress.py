@@ -52,6 +52,16 @@ ev7 = assess_outbound(text="![x](https://example.com/i?d=%s)" % ("Z" * 40))
 check("allowlisted host suppresses data-param", ev7.decision == "allow")
 os.environ.pop("AIRLOCK_EGRESS_ALLOWLIST", None)
 
+# 8) Bare (non-markdown) URL with an opaque data param in the body -> flagged.
+#    Closes openclaw red-team F5: a masked/nested tool-arg URL reaches /egress only
+#    as `text`, so the text channel must scan bare URLs (not just markdown sinks).
+ev8 = assess_outbound(text='{"url":"https://ok.test","endpoint":"https://evil.test/collect?d=%s"}' % ("A" * 48))
+check("F5 bare-url exfil in text flagged", ev8.decision in ("flag", "block")
+      and any(f.kind == "exfil_url" for f in ev8.findings))
+# benign bare URL in text (no data param) stays allowed
+ev9 = assess_outbound(text="For setup see https://example.com/guide and the README.")
+check("benign bare url in text allowed", ev9.decision == "allow")
+
 print()
 if _failures:
     print("%d FAILED: %s" % (len(_failures), _failures))

@@ -10,7 +10,7 @@ A layered prompt-injection / agent-security guard with a **shared core** and **t
 
 **Ingress** (content entering context):
 - **Invisible-Unicode / ASCII smuggling** (Stage 0): Unicode Tag block (U+E0000–E007F), zero-width, bidi overrides, supplementary variation selectors. Hidden payloads are **decoded and surfaced**, not silently dropped. Offline, deterministic, high precision.
-- **Overt injection** (Stage 1): high-precision regex for assistant-directed instructions ("ignore previous instructions", exfiltration asks, role hijacks, …). Offline.
+- **Overt injection** (Stage 1): high-precision regex for assistant-directed instructions — overt overrides ("ignore previous instructions"), exfiltration asks, role/delimiter spoofing, sensitive-file reads, plus **polite "important-instructions" / embedded-task injection** (EchoLeak-style, no override verb), **MCP "line-jumping"** command-prefix injection, and **Morse-encoded** payloads. Offline; tuned for precision (0 false positives on the benign corpus).
 - **Subtle/obfuscated injection** (Stage 2): an **ungated, openly-licensed** ML classifier (`protectai/deberta-v3-base-prompt-injection-v2`, Apache-2.0) — no account or login. Local model, no per-request network. Meta **Prompt Guard 2** is available as an opt-in backend (`AIRLOCK_STAGE2_BACKEND=promptguard`).
 - **Multimodal** (Stage 2b): OCR an ingested image/screenshot → feed extracted text (incl. low-contrast/hidden) back through Stages 0–2. Optional deps (pytesseract/Pillow); mainly for browser/computer-use agents.
 
@@ -25,6 +25,17 @@ A layered prompt-injection / agent-security guard with a **shared core** and **t
 
 **Supply chain** (installed MCP servers):
 - **MCP vetting** (Stage 6): offline tool-poisoning detection on tool/parameter descriptions (hidden `<IMPORTANT>` directives, invisible-Unicode, "read ~/.ssh / don't tell the user") + remote-code install-vector checks on server launch commands; optional `mcp-scan` enrichment (`AIRLOCK_MCP_SCAN=1`).
+
+## Recent security work (red-team rounds + hardening)
+
+Each round below tested airlock empirically (not on paper), fixed what bypassed it, shipped a regression test with **0 false positives** on the benign corpus, and passed independent adversarial review. Details in [docs/](docs/).
+
+- **Injection-bypass survey** — [docs/INJECTION-BYPASS-survey.md](docs/INJECTION-BYPASS-survey.md). 36 current (2024–2026) techniques — encoding (base64/hex/rot13/leetspeak/**Morse**/ASCII-art), Unicode (tag-smuggling, zero-width, Sneaky-Bits U+2062/2064, homoglyph, bidi), role/delimiter spoofing, Policy Puppetry, Markdown/hyperlink exfil sinks, MCP tool-poisoning/**line-jumping** — run against the live guard. **36/36 neutralized.** Fixed two bypasses: Morse-encoded payloads (`morse_encoded`, linear-time, ReDoS-safe) and MCP line-jumping (`command_prefix_injection`). Reproduce: `python3 tests/injection_battery.py`.
+- **Polite-injection dilution evasion** — surfaced by the AgentDojo eval. An "important instructions" injection diluted in benign prose slipped past Stage 1 (no override verb) *and* Stage 2 (score fell below the block threshold). Fixed with the `embedded_task_injection` heuristic.
+- **openclaw adapter red-team** — [docs/REDTEAM-openclaw.md](docs/REDTEAM-openclaw.md). 6 findings (2 Major: array-argv exec evading the egress gate; non-`text` content blocks bypassing the true-strip), each reproduced live + verified.
+- **AgentDojo efficacy** — [docs/AGENTDOJO-eval.md](docs/AGENTDOJO-eval.md). Real benchmark, local Ollama agent. On `banking` (48 attack combos), airlock cut attack-success-rate from **14.6% → 0%** (with a documented ~10pp utility cost — the Stage 2 false-positive tax).
+- **Stage 3 judge, reproducibly** — `tests/eval_align.py`. The "use a 7B+ judge" rule, measured: `qwen2.5:7b` FP-rate **0.083** vs `llama3.2:3b` **0.333** (both recall 1.0).
+- **Stage 2 cold-start** — the ML model is now pre-warmed at sidecar boot so the first ingress scan doesn't fail-open on a cold load (`AIRLOCK_PREWARM`, default on).
 
 ## Install (Claude Code)
 
@@ -123,7 +134,8 @@ adapters/
                      MCP vet, SessionStart) + airlock skill + /scan
   openclaw/        TS plugin (tool_result_persist true-strip, before_tool_call gate,
                      message_sending rewrite) → calls the core via the sidecar
-tests/             offline suites + run_all.py + fixtures/   (101 checks)
+tests/             offline suites + run_all.py + fixtures/   (252 checks)
+                     eval_stage2 / eval_align / injection_battery  (manual evals; need the model/sidecar)
 docs/SMOKE_TEST.md live in-session verification guide
 pyproject.toml     pip-installable core (+ promptguard / pii extras)
 ```
@@ -131,7 +143,7 @@ pyproject.toml     pip-installable core (+ promptguard / pii extras)
 ## Limitations (honest)
 
 - **Claude Code** hooks can't rewrite tool output, so airlock **re-anchors/blocks**, it does not byte-strip. The **openclaw** adapter *can* truly strip (via `tool_result_persist`) and rewrite the reply.
-- Ingress covers `WebFetch`/`WebSearch`; content fetched via `Bash` curl/wget bypasses the ingress hook (egress still gates the outbound `Bash`).
+- Ingress covers `WebFetch`/`WebSearch`; `Bash` curl/wget output is also ingress-scanned by default (Stage 1b, `AIRLOCK_SCAN_BASH_OUTPUT`), closing the shell-fetch bypass.
 - Stage 3 (task drift) and Stage 6's `mcp-scan` enrichment need an LLM/network; they no-op cleanly when absent. Stage 2b needs OCR deps.
 - Fails **open**: any internal error → the host session is never blocked.
 - A mitigation, not a complete fix. Egress secret detection is precision-tuned but not exhaustive; the gate defaults to **ask** (not deny) so a false positive costs a confirmation, not a hard block.
@@ -139,8 +151,9 @@ pyproject.toml     pip-installable core (+ promptguard / pii extras)
 ## Test
 
 ```bash
-python3 tests/run_all.py       # 101 offline checks (ingress, egress, alignment, MCP, memory,
+python3 tests/run_all.py       # 252 offline checks (ingress, egress, alignment, MCP, memory,
                                #   multimodal, sidecar), no external deps
+python3 tests/injection_battery.py   # full-stack bypass battery vs a running sidecar (36 techniques)
 ```
 
 For a live in-session check (the plugin actually firing on a fetch / egress), follow [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md).

@@ -1,6 +1,6 @@
 {
   "name": "airlock-openclaw",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "airlock guard adapter for openclaw — true-strip ingress, egress sink rewriting, and task-drift gating via the shared Python guard core (HTTP sidecar).",
   "type": "module",
   "main": "src/index.ts",

@@ -4,6 +4,45 @@ All notable changes to airlock are documented here. Versions follow semver.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-16
+
+A security-hardening + efficacy-evidence release. Three new high-precision Stage 1
+heuristics, a Stage 2 cold-start fix, the openclaw adapter red-team (6 findings
+closed), and reproducible Stage 3 / AgentDojo / injection-bypass evidence. Every
+change passed an independent second-AI adversarial review before shipping.
+
+### Added — Stage 1 heuristics (high-precision, 0 FP on the benign corpus)
+- **`embedded_task_injection`** — catches the polite "important instructions" /
+  EchoLeak shape that carries no override verb (so Stage 2 alone is defeated by
+  dilution). Found via AgentDojo. Flag-weight, not hard-block.
+- **`morse_encoded`** — code-based (linear-time, **ReDoS-safe**) Morse decode +
+  re-scan, closing the Morse-smuggled-instruction bypass.
+- **`command_prefix_injection`** — catches MCP **line-jumping** (instructions
+  prefixed onto a tool/command line).
+
+### Added — efficacy evidence & reproducible evals
+- **`tests/eval_align.py`** — reproducible Stage 3 (task-drift) eval mirroring
+  `eval_stage2.py`. Measured FP-rates: `qwen2.5:7b` **0.083**, `llama3.2:3b` **0.333**,
+  `gemma4:e4b` **0.250** (all recall 1.0) — the **7B-class judge floor is now a
+  measured number**, not anecdotal.
+- **`tests/injection_battery.py`** + **`docs/INJECTION-BYPASS-survey.md`** — 36
+  current bypass techniques vs the live guard: **36/36 neutralized**.
+- **`docs/AGENTDOJO-eval.md`** — AgentDojo efficacy harness. On `banking` (48 combos)
+  airlock cut attack-success-rate **14.6% → 0%** (~10pp utility cost = the Stage 2 FP
+  tax). Single seed/suite — directional, not a leaderboard number.
+- **`docs/REDTEAM-openclaw.md`** + **`adapters/openclaw/test/redteam_probe.ts`** (11/11).
+
+### Changed — Stage 2 pre-warm (closes the cold-start fail-open)
+- **`AIRLOCK_PREWARM` (default on)** — `scanners.prewarm()` warms the ML classifier in
+  a daemon thread at sidecar boot; the `_ensure_*` loaders are now thread-safe
+  (double-checked locking). Closes the openclaw ~4 s cold-load fail-open. Proven live:
+  first warm `/ingress` ~0.09 s.
+
+### Fixed — openclaw adapter red-team (all 6 findings)
+- **F1** array-argv command exec, **F2** non-`text` / nested-`resource` content blocks,
+  **F3** stringify-throw fail-open, **F5** masked / nested exfil URLs, **F6** metadata
+  exfil-URL — all closed. **F4** (oversized-result fail-open) partially mitigated.
+
 ## [0.2.4] — 2026-06-11
 
 ### Added — Stage 3 task-drift now has an open, no-subscription backend (Ollama)

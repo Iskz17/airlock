@@ -65,7 +65,30 @@ _PATTERNS = [
     ("tool_coercion", 2,
      r"\b(run|execute|eval(?:uate)?)\b[^.\n]{0,20}\b(this|the\s+following|these)\b"
      r"[^.\n]{0,20}\b(command|commands|code|script|shell)\b"),
+    # MCP "line-jumping": untrusted text dictating that EVERY command carry an
+    # attacker prefix (e.g. `chmod -R 0666 ~;`). High-precision on the distinctive
+    # "all commands must include/be-prefixed-with" idiom — not the (benign-ambiguous)
+    # secrecy clause it usually rides with. (Surfaced by the bypass eval.)
+    ("command_prefix_injection", 2,
+     r"\b(?:all|every|each|any)\s+(?:shell\s+|bash\s+|terminal\s+|cli\s+)?commands?\s+"
+     r"(?:must|should|need\s+to|have\s+to|are\s+required\s+to|always)\s+"
+     r"(?:include|use|start\s+with|begin\s+with|be\s+prefixed(?:\s+with)?|contain|append|add)\b"),
 ]
+
+# Morse-encoded payload: Stage 2's ML classifier doesn't decode Morse, so a Morse
+# blob otherwise passes. Detected in code (not a pattern) to require a MIX of dots
+# and dashes and to stay linear-time — a regex lookahead approach back-tracks
+# quadratically on benign dot/dash runs (TOC leaders, `----` rules, diff walls).
+# Space OR slash separators (slash is the standard Morse word separator).
+_MORSE_RUN = re.compile(r"[.\-]{1,6}(?:[ /]+[.\-]{1,6}){5,}")
+
+
+def _morse_hit(text: str):
+    for m in _MORSE_RUN.finditer(text):
+        s = m.group(0)
+        if "." in s and "-" in s:  # mixed -> a real Morse blob, not a rule/ellipsis
+            return s
+    return None
 
 _COMPILED = [(label, weight, re.compile(pat, re.IGNORECASE)) for label, weight, pat in _PATTERNS]
 
@@ -87,4 +110,8 @@ def scan(text: str) -> list:
             if len(snip) > 120:
                 snip = snip[:117] + "..."
             hits.append(HeuristicHit(label=label, weight=weight, snippet=snip))
+    morse = _morse_hit(text)
+    if morse:
+        snip = morse if len(morse) <= 120 else morse[:117] + "..."
+        hits.append(HeuristicHit(label="morse_encoded", weight=2, snippet=snip))
     return hits
